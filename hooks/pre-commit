@@ -1,0 +1,28 @@
+#!/bin/sh
+
+echo "▶ ESLint + Prettier 검사 중..."
+
+npm run lint --silent
+LINT_STATUS=$?
+
+if [ $LINT_STATUS -ne 0 ]; then
+  echo ""
+  echo "✗ ESLint 오류가 있습니다. 아래 명령어로 자동 수정 후 다시 커밋하세요:"
+  echo "  npm run lint:fix"
+  echo ""
+  exit 1
+fi
+
+npm run format:check --silent
+FORMAT_STATUS=$?
+
+if [ $FORMAT_STATUS -ne 0 ]; then
+  echo ""
+  echo "✗ 포맷 오류가 있습니다. 아래 명령어로 자동 수정 후 다시 커밋하세요:"
+  echo "  npm run format"
+  echo ""
+  exit 1
+fi
+
+echo "✓ 포맷 검사 통과"
+exit 0
