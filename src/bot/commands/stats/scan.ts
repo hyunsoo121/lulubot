@@ -1,14 +1,36 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { scanMatchesByUser } from '../../../services/matchScan';
+import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
+import { scanMatchesByUser, isScanningUser, getScanCooldown } from '../../../services/matchScan';
 
 export const data = new SlashCommandBuilder()
   .setName('전적갱신')
   .setDescription('내 커스텀 게임 기록을 스캔해서 전적을 갱신합니다.');
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
-
   const discordUserId = BigInt(interaction.user.id);
+
+  // 진행 중 체크
+  if (await isScanningUser(discordUserId)) {
+    await interaction.reply({
+      content: '⏳ 이미 갱신이 진행 중입니다. 완료 후 다시 시도해주세요.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  // 쿨다운 체크
+  const cooldown = await getScanCooldown(discordUserId);
+  if (cooldown > 0) {
+    const minutes = Math.ceil(cooldown / 60);
+    const seconds = cooldown % 60;
+    const timeStr = minutes > 1 ? `${minutes}분 ${seconds}초` : `${seconds}초`;
+    await interaction.reply({
+      content: `⏳ 갱신은 3분에 한 번만 가능합니다. **${timeStr}** 후에 다시 시도해주세요.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  await interaction.deferReply();
 
   try {
     const notice = await interaction.editReply('🔍 전적 갱신 중...');

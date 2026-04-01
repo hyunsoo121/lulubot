@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { registerAccount } from '../../../services/account';
+import { scanMatchesByUser } from '../../../services/matchScan';
 
 export const data = new SlashCommandBuilder()
   .setName('등록')
@@ -32,9 +33,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       tagLine.trim(),
       guildServerId,
     );
+
     await interaction.editReply(
       `✅ 등록 완료!\n**${account.gameName}#${account.tagLine}** 계정이 연결되었습니다.`,
     );
+
+    // 백그라운드 스캔 — 에러는 콘솔에만 기록
+    scanMatchesByUser(discordUserId).catch((err) => {
+      console.error('[Scan] 백그라운드 스캔 오류:', err);
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
 

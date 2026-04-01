@@ -1,6 +1,42 @@
 import prisma from '../lib/prisma';
+import redis from '../lib/redis';
 import { getAllMatchIds, getMatch, sleep } from './riot';
 import { RiotMatchParticipant } from '../types';
+
+const SCAN_LOCK_TTL = 60 * 30; // 30분 (최대 스캔 시간)
+const SCAN_COOLDOWN_TTL = 60 * 3; // 3분 쿨다운
+
+function scanLockKey(discordUserId: bigint) {
+  return `scan:lock:${discordUserId}`;
+}
+
+function scanCooldownKey(discordUserId: bigint) {
+  return `scan:cooldown:${discordUserId}`;
+}
+
+export async function isScanningUser(discordUserId: bigint): Promise<boolean> {
+  const val = await redis.get(scanLockKey(discordUserId));
+  return val !== null;
+}
+
+/** 쿨다운 남은 시간(초) 반환. 0이면 쿨다운 없음 */
+export async function getScanCooldown(discordUserId: bigint): Promise<number> {
+  const ttl = await redis.ttl(scanCooldownKey(discordUserId));
+  return ttl > 0 ? ttl : 0;
+}
+
+async function acquireScanLock(discordUserId: bigint): Promise<boolean> {
+  const result = await redis.set(scanLockKey(discordUserId), '1', 'EX', SCAN_LOCK_TTL, 'NX');
+  return result === 'OK';
+}
+
+async function releaseScanLock(discordUserId: bigint) {
+  await redis.del(scanLockKey(discordUserId));
+}
+
+async function setScanCooldown(discordUserId: bigint) {
+  await redis.set(scanCooldownKey(discordUserId), '1', 'EX', SCAN_COOLDOWN_TTL);
+}
 
 export interface ScanResult {
   scanned: number;
@@ -115,50 +151,60 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
 
 /** 특정 유저(discordUserId 기준)의 전체 매치를 스캔해서 저장 */
 export async function scanMatchesByUser(discordUserId: bigint): Promise<ScanResult> {
-  const user = await prisma.user.findUnique({
-    where: { discordUserId },
-    include: { lolAccounts: true },
-  });
-
-  if (!user || user.lolAccounts.length === 0) {
-    throw new Error('등록된 라이엇 계정이 없습니다. `/등록` 먼저 해주세요.');
+  const locked = await acquireScanLock(discordUserId);
+  if (!locked) {
+    throw new Error('SCAN_IN_PROGRESS');
   }
 
-  // 해당 유저의 가장 최근 저장된 매치 날짜 조회
-  const lolAccountIds = user.lolAccounts.map((a) => a.id);
-  const latestStat = await prisma.playerMatchStat.findFirst({
-    where: { lolAccountId: { in: lolAccountIds } },
-    include: { matchRecord: true },
-    orderBy: { matchRecord: { playedAt: 'desc' } },
-  });
+  try {
+    const user = await prisma.user.findUnique({
+      where: { discordUserId },
+      include: { lolAccounts: true },
+    });
 
-  // 마지막 저장 매치 이후만 조회 (최초 스캔이면 startTime 없음 → 전체)
-  const startTime = latestStat
-    ? Math.floor(latestStat.matchRecord.playedAt.getTime() / 1000)
-    : undefined;
-
-  const isFirstScan = startTime === undefined;
-
-  const matchIdSet = new Set<string>();
-  for (const account of user.lolAccounts) {
-    const ids = await getAllMatchIds(account.puuid, startTime);
-    ids.forEach((id) => matchIdSet.add(id));
-  }
-
-  const matchIds = [...matchIdSet];
-  let saved = 0;
-  let skipped = 0;
-
-  for (const matchId of matchIds) {
-    try {
-      const wasSaved = await saveMatch(matchId, null);
-      if (wasSaved) saved++;
-      else skipped++;
-      await sleep(100);
-    } catch {
-      skipped++;
+    if (!user || user.lolAccounts.length === 0) {
+      throw new Error('등록된 라이엇 계정이 없습니다. `/등록` 먼저 해주세요.');
     }
-  }
 
-  return { scanned: matchIds.length, saved, skipped, isFirstScan };
+    // 해당 유저의 가장 최근 저장된 매치 날짜 조회
+    const lolAccountIds = user.lolAccounts.map((a) => a.id);
+    const latestStat = await prisma.playerMatchStat.findFirst({
+      where: { lolAccountId: { in: lolAccountIds } },
+      include: { matchRecord: true },
+      orderBy: { matchRecord: { playedAt: 'desc' } },
+    });
+
+    // 마지막 저장 매치 이후만 조회 (최초 스캔이면 startTime 없음 → 전체)
+    const startTime = latestStat
+      ? Math.floor(latestStat.matchRecord.playedAt.getTime() / 1000)
+      : undefined;
+
+    const isFirstScan = startTime === undefined;
+
+    const matchIdSet = new Set<string>();
+    for (const account of user.lolAccounts) {
+      const ids = await getAllMatchIds(account.puuid, startTime);
+      ids.forEach((id) => matchIdSet.add(id));
+    }
+
+    const matchIds = [...matchIdSet];
+    let saved = 0;
+    let skipped = 0;
+
+    for (const matchId of matchIds) {
+      try {
+        const wasSaved = await saveMatch(matchId, null);
+        if (wasSaved) saved++;
+        else skipped++;
+        await sleep(100);
+      } catch {
+        skipped++;
+      }
+    }
+
+    await setScanCooldown(discordUserId);
+    return { scanned: matchIds.length, saved, skipped, isFirstScan };
+  } finally {
+    await releaseScanLock(discordUserId);
+  }
 }
