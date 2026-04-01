@@ -20,6 +20,7 @@ const body = [...commands.values()].map((cmd) => cmd.data.toJSON());
   await rest.put(Routes.applicationCommands(clientId), { body });
 
   console.log('[Deploy] 완료');
+  process.exit(0);
 })().catch((err) => {
   console.error('[Deploy] 오류:', err);
   process.exit(1);
