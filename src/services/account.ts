@@ -1,7 +1,12 @@
 import prisma from '../lib/prisma';
 import { getAccountByRiotId } from './riot';
 
-export async function registerAccount(discordUserId: bigint, gameName: string, tagLine: string) {
+export async function registerAccount(
+  discordUserId: bigint,
+  gameName: string,
+  tagLine: string,
+  guildServerId?: bigint,
+) {
   // Riot API로 PUUID 조회
   const riotAccount = await getAccountByRiotId(gameName, tagLine);
 
@@ -44,6 +49,20 @@ export async function registerAccount(discordUserId: bigint, gameName: string, t
       tagLine: riotAccount.tagLine,
     },
   });
+
+  // 서버-유저 연결 (guildServerId가 있을 때)
+  if (guildServerId) {
+    await prisma.guildServer.upsert({
+      where: { id: guildServerId },
+      update: {},
+      create: { id: guildServerId },
+    });
+    await prisma.userGuildServer.upsert({
+      where: { userId_guildServerId: { userId: user.id, guildServerId } },
+      update: {},
+      create: { userId: user.id, guildServerId },
+    });
+  }
 
   return lolAccount;
 }

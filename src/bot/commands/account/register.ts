@@ -23,9 +23,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   const discordUserId = BigInt(interaction.user.id);
+  const guildServerId = interaction.guildId ? BigInt(interaction.guildId) : undefined;
 
   try {
-    const account = await registerAccount(discordUserId, gameName.trim(), tagLine.trim());
+    const account = await registerAccount(
+      discordUserId,
+      gameName.trim(),
+      tagLine.trim(),
+      guildServerId,
+    );
     await interaction.editReply(
       `✅ 등록 완료!\n**${account.gameName}#${account.tagLine}** 계정이 연결되었습니다.`,
     );

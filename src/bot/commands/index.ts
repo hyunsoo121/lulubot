@@ -9,6 +9,7 @@ import * as myinfo from './account/myinfo';
 import * as create from './match/create';
 import * as record from './stats/record';
 import * as ranking from './stats/ranking';
+import * as scan from './stats/scan';
 
 interface Command {
   data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
@@ -17,7 +18,7 @@ interface Command {
 
 export const commands = new Collection<string, Command>();
 
-const commandList: Command[] = [register, myinfo, create, record, ranking];
+const commandList: Command[] = [register, myinfo, create, record, ranking, scan];
 
 for (const command of commandList) {
   commands.set(command.data.name, command);
