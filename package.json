@@ -11,6 +11,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
+    "deploy:commands": "ts-node src/scripts/deployCommands.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
@@ -27,7 +28,7 @@
   },
   "homepage": "https://github.com/hyunsoo121/lulubot#readme",
   "dependencies": {
-    "@prisma/client": "^7.6.0",
+    "@prisma/client": "^5.22.0",
     "axios": "^1.14.0",
     "discord.js": "^14.25.1",
     "dotenv": "^17.3.1",
@@ -44,8 +45,9 @@
     "eslint-plugin-prettier": "^5.5.5",
     "nodemon": "^3.1.14",
     "prettier": "^3.8.1",
-    "prisma": "^7.6.0",
+    "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0"
   }
 }

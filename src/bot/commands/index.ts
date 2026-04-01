@@ -1,4 +1,9 @@
-import { ChatInputCommandInteraction, Collection, SlashCommandBuilder } from 'discord.js';
+import {
+  ChatInputCommandInteraction,
+  Collection,
+  SlashCommandBuilder,
+  SlashCommandOptionsOnlyBuilder,
+} from 'discord.js';
 import * as register from './account/register';
 import * as myinfo from './account/myinfo';
 import * as create from './match/create';
@@ -6,7 +11,7 @@ import * as record from './stats/record';
 import * as ranking from './stats/ranking';
 
 interface Command {
-  data: SlashCommandBuilder;
+  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
