@@ -36,6 +36,7 @@ model LolAccount {
   tournamentCodes  TournamentCode[]
   playerMatchStats PlayerMatchStat[]
   userServerStats  UserServerStat[]
+  userGlobalStat   UserGlobalStat?
   championStats    ChampionStat[]
   positionStats    PositionStat[]
   duoStatsAs1      DuoStat[]         @relation("DuoAccount1")
@@ -99,16 +100,16 @@ model TournamentCode {
 }
 
 model MatchRecord {
-  id               BigInt   @id @default(autoincrement())
-  matchId          String   @unique @map("match_id") @db.VarChar(50)
-  guildServerId    BigInt   @map("guild_server_id")
-  tournamentCodeId BigInt   @unique @map("tournament_code_id")
-  winnerTeam       Team     @map("winner_team")
-  gameDurationSecs Int      @map("game_duration_secs")
-  playedAt         DateTime @map("played_at")
+  id               BigInt    @id @default(autoincrement())
+  matchId          String    @unique @map("match_id") @db.VarChar(50)
+  guildServerId    BigInt?   @map("guild_server_id")   // NULL = 글로벌 스캔 매치
+  tournamentCodeId BigInt?   @unique @map("tournament_code_id")
+  winnerTeam       Team      @map("winner_team")
+  gameDurationSecs Int       @map("game_duration_secs")
+  playedAt         DateTime  @map("played_at")
 
-  guildServer    GuildServer       @relation(fields: [guildServerId], references: [id])
-  tournamentCode TournamentCode    @relation(fields: [tournamentCodeId], references: [id])
+  guildServer    GuildServer?      @relation(fields: [guildServerId], references: [id])
+  tournamentCode TournamentCode?   @relation(fields: [tournamentCodeId], references: [id])
   playerStats    PlayerMatchStat[]
 
   @@map("match_record")
@@ -163,6 +164,26 @@ model UserServerStat {
 
   @@unique([lolAccountId, guildServerId])
   @@map("user_server_stat")
+}
+
+// 전체 서버 합산 누적 통계 (커스텀 게임 전체 기반)
+model UserGlobalStat {
+  id               BigInt   @id @default(autoincrement())
+  lolAccountId     BigInt   @unique @map("lol_account_id")
+  totalGames       Int      @default(0) @map("total_games")
+  totalWins        Int      @default(0) @map("total_wins")
+  totalKills       Int      @default(0) @map("total_kills")
+  totalDeaths      Int      @default(0) @map("total_deaths")
+  totalAssists     Int      @default(0) @map("total_assists")
+  totalDamage      BigInt   @default(0) @map("total_damage")
+  totalVisionScore Int      @default(0) @map("total_vision_score")
+  mvpCount         Int      @default(0) @map("mvp_count")
+  pentaKillCount   Int      @default(0) @map("penta_kill_count")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  lolAccount LolAccount @relation(fields: [lolAccountId], references: [id])
+
+  @@map("user_global_stat")
 }
 
 model ChampionStat {
