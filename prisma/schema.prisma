@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// 유저 & 계정
+// ─────────────────────────────────────────
+
+model User {
+  id            BigInt   @id @default(autoincrement())
+  discordUserId BigInt?  @unique @map("discord_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  lolAccounts      LolAccount[]
+  userGuildServers UserGuildServer[]
+
+  @@map("user")
+}
+
+model LolAccount {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt?  @map("user_id")
+  puuid     String   @unique @db.VarChar(78)
+  gameName  String   @map("game_name") @db.VarChar(100)
+  tagLine   String   @map("tag_line") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  tournamentCodes  TournamentCode[]
+  playerMatchStats PlayerMatchStat[]
+  userServerStats  UserServerStat[]
+  championStats    ChampionStat[]
+  positionStats    PositionStat[]
+  duoStatsAs1      DuoStat[]         @relation("DuoAccount1")
+  duoStatsAs2      DuoStat[]         @relation("DuoAccount2")
+  userAchievements UserAchievement[]
+
+  @@map("lol_account")
+}
+
+// ─────────────────────────────────────────
+// 서버
+// ─────────────────────────────────────────
+
+model GuildServer {
+  id            BigInt   @id
+  serverName    String?  @map("server_name") @db.VarChar(100)
+  isWhitelisted Boolean  @default(false) @map("is_whitelisted")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  userGuildServers UserGuildServer[]
+  tournamentCodes  TournamentCode[]
+  matchRecords     MatchRecord[]
+  userServerStats  UserServerStat[]
+  championStats    ChampionStat[]
+  positionStats    PositionStat[]
+  duoStats         DuoStat[]
+
+  @@map("guild_server")
+}
+
+model UserGuildServer {
+  userId        BigInt   @map("user_id")
+  guildServerId BigInt   @map("guild_server_id")
+  joinedAt      DateTime @default(now()) @map("joined_at")
+
+  user        User        @relation(fields: [userId], references: [id])
+  guildServer GuildServer @relation(fields: [guildServerId], references: [id])
+
+  @@id([userId, guildServerId])
+  @@map("user_guild_server")
+}
+
+// ─────────────────────────────────────────
+// 토너먼트 & 매치
+// ─────────────────────────────────────────
+
+model TournamentCode {
+  id            BigInt               @id @default(autoincrement())
+  code          String               @unique @db.VarChar(100)
+  guildServerId BigInt               @map("guild_server_id")
+  issuedBy      BigInt               @map("issued_by")
+  status        TournamentCodeStatus @default(PENDING)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  expiredAt     DateTime?            @map("expired_at")
+
+  guildServer GuildServer  @relation(fields: [guildServerId], references: [id])
+  lolAccount  LolAccount   @relation(fields: [issuedBy], references: [id])
+  matchRecord MatchRecord?
+
+  @@map("tournament_code")
+}
+
+model MatchRecord {
+  id               BigInt   @id @default(autoincrement())
+  matchId          String   @unique @map("match_id") @db.VarChar(50)
+  guildServerId    BigInt   @map("guild_server_id")
+  tournamentCodeId BigInt   @unique @map("tournament_code_id")
+  winnerTeam       Team     @map("winner_team")
+  gameDurationSecs Int      @map("game_duration_secs")
+  playedAt         DateTime @map("played_at")
+
+  guildServer    GuildServer       @relation(fields: [guildServerId], references: [id])
+  tournamentCode TournamentCode    @relation(fields: [tournamentCodeId], references: [id])
+  playerStats    PlayerMatchStat[]
+
+  @@map("match_record")
+}
+
+model PlayerMatchStat {
+  id           BigInt  @id @default(autoincrement())
+  matchId      BigInt  @map("match_id")
+  lolAccountId BigInt  @map("lol_account_id")
+  team         Team
+  championId   Int     @map("champion_id")
+  position     String  @db.VarChar(20)
+  kills        Int
+  deaths       Int
+  assists      Int
+  cs           Int
+  damageDealt  Int     @map("damage_dealt")
+  damageTaken  Int     @map("damage_taken")
+  goldEarned   Int     @map("gold_earned")
+  visionScore  Int     @map("vision_score")
+  isWin        Boolean @map("is_win")
+  isMvp        Boolean @default(false) @map("is_mvp")
+
+  matchRecord MatchRecord @relation(fields: [matchId], references: [id])
+  lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])
+
+  @@map("player_match_stat")
+}
+
+// ─────────────────────────────────────────
+// 통계
+// ─────────────────────────────────────────
+
+model UserServerStat {
+  id               BigInt   @id @default(autoincrement())
+  lolAccountId     BigInt   @map("lol_account_id")
+  guildServerId    BigInt   @map("guild_server_id")
+  totalGames       Int      @default(0) @map("total_games")
+  totalWins        Int      @default(0) @map("total_wins")
+  totalKills       Int      @default(0) @map("total_kills")
+  totalDeaths      Int      @default(0) @map("total_deaths")
+  totalAssists     Int      @default(0) @map("total_assists")
+  totalDamage      BigInt   @default(0) @map("total_damage")
+  totalVisionScore Int      @default(0) @map("total_vision_score")
+  mvpCount         Int      @default(0) @map("mvp_count")
+  pentaKillCount   Int      @default(0) @map("penta_kill_count")
+  currentStreak    Int      @default(0) @map("current_streak")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])
+  guildServer GuildServer @relation(fields: [guildServerId], references: [id])
+
+  @@unique([lolAccountId, guildServerId])
+  @@map("user_server_stat")
+}
+
+model ChampionStat {
+  id            BigInt @id @default(autoincrement())
+  lolAccountId  BigInt @map("lol_account_id")
+  guildServerId BigInt @map("guild_server_id")
+  championId    Int    @map("champion_id")
+  totalGames    Int    @default(0) @map("total_games")
+  totalWins     Int    @default(0) @map("total_wins")
+  totalKills    Int    @default(0) @map("total_kills")
+  totalDeaths   Int    @default(0) @map("total_deaths")
+  totalAssists  Int    @default(0) @map("total_assists")
+
+  lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])
+  guildServer GuildServer @relation(fields: [guildServerId], references: [id])
+
+  @@unique([lolAccountId, guildServerId, championId])
+  @@map("champion_stat")
+}
+
+model PositionStat {
+  id            BigInt @id @default(autoincrement())
+  lolAccountId  BigInt @map("lol_account_id")
+  guildServerId BigInt @map("guild_server_id")
+  position      String @db.VarChar(20)
+  totalGames    Int    @default(0) @map("total_games")
+  totalWins     Int    @default(0) @map("total_wins")
+  totalKills    Int    @default(0) @map("total_kills")
+  totalDeaths   Int    @default(0) @map("total_deaths")
+  totalAssists  Int    @default(0) @map("total_assists")
+
+  lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])
+  guildServer GuildServer @relation(fields: [guildServerId], references: [id])
+
+  @@unique([lolAccountId, guildServerId, position])
+  @@map("position_stat")
+}
+
+model DuoStat {
+  id            BigInt @id @default(autoincrement())
+  guildServerId BigInt @map("guild_server_id")
+  lolAccountId1 BigInt @map("lol_account_id_1")
+  lolAccountId2 BigInt @map("lol_account_id_2")
+  sameTeamGames Int    @default(0) @map("same_team_games")
+  sameTeamWins  Int    @default(0) @map("same_team_wins")
+  againstGames  Int    @default(0) @map("against_games")
+  againstWins   Int    @default(0) @map("against_wins")
+
+  guildServer GuildServer @relation(fields: [guildServerId], references: [id])
+  lolAccount1 LolAccount  @relation("DuoAccount1", fields: [lolAccountId1], references: [id])
+  lolAccount2 LolAccount  @relation("DuoAccount2", fields: [lolAccountId2], references: [id])
+
+  @@unique([guildServerId, lolAccountId1, lolAccountId2])
+  @@map("duo_stat")
+}
+
+// ─────────────────────────────────────────
+// 업적
+// ─────────────────────────────────────────
+
+model Achievement {
+  id          BigInt @id @default(autoincrement())
+  code        String @unique @db.VarChar(50)
+  name        String @db.VarChar(100)
+  description String @db.VarChar(255)
+  icon        String @db.VarChar(10)
+
+  userAchievements UserAchievement[]
+
+  @@map("achievement")
+}
+
+model UserAchievement {
+  id            BigInt   @id @default(autoincrement())
+  lolAccountId  BigInt   @map("lol_account_id")
+  achievementId BigInt   @map("achievement_id")
+  achievedAt    DateTime @default(now()) @map("achieved_at")
+
+  lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([lolAccountId, achievementId])
+  @@map("user_achievement")
+}
+
+// ─────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────
+
+enum TournamentCodeStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+}
+
+enum Team {
+  BLUE
+  RED
+}
