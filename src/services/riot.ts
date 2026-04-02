@@ -67,7 +67,5 @@ export async function getAllMatchIds(puuid: string, startTime?: number): Promise
 }
 
 export async function getMatch(matchId: string): Promise<RiotMatch> {
-  return riotGet<RiotMatch>(
-    `https://asia.api.riotgames.com/lol/match/v5/matches/${matchId}`,
-  );
+  return riotGet<RiotMatch>(`https://asia.api.riotgames.com/lol/match/v5/matches/${matchId}`);
 }

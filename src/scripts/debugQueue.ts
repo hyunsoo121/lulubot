@@ -40,7 +40,9 @@ async function main() {
       const { data } = await riotApi.get(
         `https://asia.api.riotgames.com/lol/match/v5/matches/${matchId}`,
       );
-      console.log(`${matchId} → gameType: ${data.info.gameType}, gameMode: ${data.info.gameMode}, queueId: ${data.info.queueId}`);
+      console.log(
+        `${matchId} → gameType: ${data.info.gameType}, gameMode: ${data.info.gameMode}, queueId: ${data.info.queueId}`,
+      );
     }
   }
 }

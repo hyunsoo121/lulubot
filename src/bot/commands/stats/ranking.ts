@@ -48,7 +48,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       }
 
       const wr = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
-      const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(2);
+      const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(
+        2,
+      );
       return `${medal} **${memberName}** (${accountsStr})　${wr}% (${stat.totalWins}승 ${stat.totalGames - stat.totalWins}패)　KDA ${kda}`;
     }),
   );

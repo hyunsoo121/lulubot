@@ -5,10 +5,7 @@ export const data = new SlashCommandBuilder()
   .setName('전적갱신')
   .setDescription('커스텀 게임 기록을 스캔해서 전적을 갱신합니다.')
   .addUserOption((option) =>
-    option
-      .setName('멤버')
-      .setDescription('갱신할 멤버 (미입력 시 본인)')
-      .setRequired(false),
+    option.setName('멤버').setDescription('갱신할 멤버 (미입력 시 본인)').setRequired(false),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {

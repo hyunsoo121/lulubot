@@ -14,13 +14,31 @@ function scanCooldownKey(discordUserId: bigint) {
   return `scan:cooldown:${discordUserId}`;
 }
 
-/** 봇 재시작 시 남아있는 스캔 락을 모두 제거 */
+/** 봇 재시작 시 중단된 스캔을 감지하고 해당 유저 데이터를 초기화 */
 export async function clearAllScanLocks(): Promise<void> {
   const keys = await redis.keys('scan:lock:*');
-  if (keys.length > 0) {
-    await redis.del(...keys);
-    console.log(`[matchScan] 재시작으로 인해 스캔 락 ${keys.length}개 초기화`);
+  if (keys.length === 0) return;
+
+  for (const key of keys) {
+    // scan:lock:{discordUserId} 에서 discordUserId 추출
+    const discordUserId = BigInt(key.replace('scan:lock:', ''));
+
+    // 중단된 스캔의 부분 저장 데이터를 제거 → 다음 스캔이 처음부터 시작
+    const user = await prisma.user.findUnique({
+      where: { discordUserId },
+      include: { lolAccounts: true },
+    });
+
+    if (user) {
+      const lolAccountIds = user.lolAccounts.map((a) => a.id);
+      await prisma.userGlobalStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
+      await prisma.playerMatchStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
+      await prisma.matchRecord.deleteMany({ where: { playerStats: { none: {} } } });
+      console.log(`[matchScan] 중단된 스캔 감지 (${discordUserId}) → 데이터 초기화, 다음 갱신 시 전체 재스캔`);
+    }
   }
+
+  await redis.del(...keys);
 }
 
 export async function isScanningUser(discordUserId: bigint): Promise<boolean> {
@@ -54,10 +72,11 @@ export interface ScanResult {
   isFirstScan: boolean;
 }
 
-/** MVP 판정: 승리팀 중 챔피언 딜 1위 */
+/** MVP 판정: 승리팀 중 챔피언 딜 1위. 승리팀 없으면 전체에서 딜 1위 */
 function getMvpPuuid(participants: RiotMatchParticipant[]): string {
-  const winners = participants.filter((p) => p.win);
-  return winners.reduce((best, p) =>
+  const candidates = participants.filter((p) => p.win);
+  const pool = candidates.length > 0 ? candidates : participants;
+  return pool.reduce((best, p) =>
     p.totalDamageDealtToChampions > best.totalDamageDealtToChampions ? p : best,
   ).puuid;
 }
@@ -213,7 +232,8 @@ export async function scanMatchesByUser(
       ids.forEach((id) => matchIdSet.add(id));
     }
 
-    const matchIds = [...matchIdSet];
+    // 오래된 순서부터 저장 → 중단 시 다음 증분 스캔이 이어받을 수 있음
+    const matchIds = [...matchIdSet].reverse();
     let saved = 0;
     let skipped = 0;
 

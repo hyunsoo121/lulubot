@@ -6,7 +6,9 @@ const clientId = process.env.DISCORD_CLIENT_ID;
 const guildId = process.env.DISCORD_GUILD_ID;
 
 if (!token || !clientId || !guildId) {
-  console.error('[Clear] DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID 환경변수를 확인하세요.');
+  console.error(
+    '[Clear] DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID 환경변수를 확인하세요.',
+  );
   process.exit(1);
 }
 
