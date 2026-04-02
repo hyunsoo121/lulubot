@@ -22,18 +22,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const { account, stat } = result;
-  const winRate = stat.totalGames > 0 ? ((stat.totalWins / stat.totalGames) * 100).toFixed(1) : '0';
+  const { accounts, stat } = result;
+  const accountsStr = accounts.map((a) => `${a.gameName}#${a.tagLine}`).join(', ');
+  const winRate = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
   const kda =
     stat.totalDeaths > 0
       ? ((stat.totalKills + stat.totalAssists) / stat.totalDeaths).toFixed(2)
       : 'Perfect';
-  const avgKills = stat.totalGames > 0 ? (stat.totalKills / stat.totalGames).toFixed(1) : '0';
-  const avgDeaths = stat.totalGames > 0 ? (stat.totalDeaths / stat.totalGames).toFixed(1) : '0';
-  const avgAssists = stat.totalGames > 0 ? (stat.totalAssists / stat.totalGames).toFixed(1) : '0';
+  const avgKills = (stat.totalKills / stat.totalGames).toFixed(1);
+  const avgDeaths = (stat.totalDeaths / stat.totalGames).toFixed(1);
+  const avgAssists = (stat.totalAssists / stat.totalGames).toFixed(1);
 
   const embed = new EmbedBuilder()
-    .setTitle(`${account.gameName}#${account.tagLine} 전체 전적`)
+    .setTitle(`${accountsStr} 전체 전적`)
     .setColor(0x5865f2)
     .addFields(
       { name: '총 경기', value: `${stat.totalGames}판`, inline: true },
@@ -47,7 +48,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       { name: 'MVP', value: `${stat.mvpCount}회`, inline: true },
       { name: '펜타킬', value: `${stat.pentaKillCount}회`, inline: true },
     )
-    .setFooter({ text: '전체 서버 커스텀 게임 기준' })
+    .setFooter({ text: '전체 서버 커스텀 게임 기준 · 모든 등록 계정 합산' })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });

@@ -39,7 +39,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     );
 
     // 백그라운드 스캔 — 에러는 콘솔에만 기록
-    scanMatchesByUser(discordUserId).catch((err) => {
+    scanMatchesByUser(discordUserId, guildServerId).catch((err) => {
       console.error('[Scan] 백그라운드 스캔 오류:', err);
     });
   } catch (err) {

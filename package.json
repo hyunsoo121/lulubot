@@ -12,6 +12,7 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "deploy:commands": "ts-node src/scripts/deployCommands.ts",
+    "clear:guild-commands": "ts-node src/scripts/clearGuildCommands.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

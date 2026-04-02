@@ -17,4 +17,6 @@ async function main() {
   console.log(JSON.stringify(users, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2));
 }
 
-main().catch(console.error).finally(() => process.exit());
+main()
+  .catch(console.error)
+  .finally(() => process.exit());

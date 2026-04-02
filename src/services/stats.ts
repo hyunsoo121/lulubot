@@ -1,23 +1,53 @@
 import prisma from '../lib/prisma';
 
+export interface AggregatedStat {
+  totalGames: number;
+  totalWins: number;
+  totalKills: number;
+  totalDeaths: number;
+  totalAssists: number;
+  totalDamage: bigint;
+  totalVisionScore: number;
+  mvpCount: number;
+  pentaKillCount: number;
+}
+
+function mergeStats(stats: AggregatedStat[]): AggregatedStat {
+  return stats.reduce((acc, s) => ({
+    totalGames: acc.totalGames + s.totalGames,
+    totalWins: acc.totalWins + s.totalWins,
+    totalKills: acc.totalKills + s.totalKills,
+    totalDeaths: acc.totalDeaths + s.totalDeaths,
+    totalAssists: acc.totalAssists + s.totalAssists,
+    totalDamage: acc.totalDamage + s.totalDamage,
+    totalVisionScore: acc.totalVisionScore + s.totalVisionScore,
+    mvpCount: acc.mvpCount + s.mvpCount,
+    pentaKillCount: acc.pentaKillCount + s.pentaKillCount,
+  }));
+}
+
 export async function getGlobalStatByDiscordId(discordUserId: bigint) {
   const user = await prisma.user.findUnique({
     where: { discordUserId },
     include: {
-      lolAccounts: {
-        include: { userGlobalStat: true },
-      },
+      lolAccounts: { include: { userGlobalStat: true } },
     },
   });
 
   if (!user || user.lolAccounts.length === 0) return null;
 
-  // 계정이 여러 개면 합산
-  const account = user.lolAccounts[0];
-  return { account, stat: account.userGlobalStat };
+  const accounts = user.lolAccounts;
+  const statList = accounts
+    .map((a) => a.userGlobalStat)
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+
+  return {
+    accounts,
+    stat: statList.length > 0 ? mergeStats(statList) : null,
+  };
 }
 
-/** 서버 등록 유저의 글로벌 랭킹 */
+/** 서버 등록 유저의 글로벌 랭킹 (유저 단위 합산) */
 export async function getServerRanking(guildServerId: bigint, limit = 10) {
   const users = await prisma.user.findMany({
     where: {
@@ -25,16 +55,23 @@ export async function getServerRanking(guildServerId: bigint, limit = 10) {
       discordUserId: { not: null },
     },
     include: {
-      lolAccounts: {
-        include: { userGlobalStat: true },
-      },
+      lolAccounts: { include: { userGlobalStat: true } },
     },
   });
 
   const entries = users
-    .flatMap((u) => u.lolAccounts.map((a) => ({ account: a, stat: a.userGlobalStat })))
+    .map((u) => {
+      const statList = u.lolAccounts
+        .map((a) => a.userGlobalStat)
+        .filter((s): s is NonNullable<typeof s> => s !== null);
+
+      return {
+        discordUserId: u.discordUserId!,
+        accounts: u.lolAccounts,
+        stat: statList.length > 0 ? mergeStats(statList) : null,
+      };
+    })
     .sort((a, b) => {
-      // 스탯 없는 유저는 맨 뒤
       if (!a.stat && !b.stat) return 0;
       if (!a.stat) return 1;
       if (!b.stat) return -1;

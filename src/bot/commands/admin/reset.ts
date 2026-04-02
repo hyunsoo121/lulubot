@@ -18,7 +18,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const guildServerId = BigInt(interaction.guildId!);
 
-  // 서버에 등록된 유저 조회
+  // 이 서버에 등록된 유저 및 계정 조회
   const users = await prisma.user.findMany({
     where: { userGuildServers: { some: { guildServerId } } },
     include: { lolAccounts: true },
@@ -26,23 +26,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const lolAccountIds = users.flatMap((u) => u.lolAccounts.map((a) => a.id));
 
-  // 통계 초기화
+  // 글로벌 통계 초기화
   await prisma.userGlobalStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
 
-  // 매치 데이터 초기화 (이 서버 소속 매치만)
-  const matchIds = await prisma.matchRecord
-    .findMany({ where: { guildServerId }, select: { id: true } })
-    .then((rows) => rows.map((r) => r.id));
+  // 해당 계정의 PlayerMatchStat 전체 삭제 (guildServerId 무관)
+  await prisma.playerMatchStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
 
-  if (matchIds.length > 0) {
-    await prisma.playerMatchStat.deleteMany({ where: { matchId: { in: matchIds } } });
-    await prisma.matchRecord.deleteMany({ where: { id: { in: matchIds } } });
-  }
+  // PlayerMatchStat이 없는 MatchRecord 정리 (orphan)
+  await prisma.matchRecord.deleteMany({ where: { playerStats: { none: {} } } });
 
-  // UserGuildServer 및 User 연결 해제
+  // UserGuildServer 연결 해제
   await prisma.userGuildServer.deleteMany({ where: { guildServerId } });
 
   await interaction.editReply(
-    `✅ 초기화 완료!\n> 삭제된 매치: **${matchIds.length}**건\n> 초기화된 계정: **${lolAccountIds.length}**개`,
+    `✅ 초기화 완료!\n> 초기화된 계정: **${lolAccountIds.length}**개\n> 계정은 유지됩니다. 재등록 없이 바로 \`/전적갱신\` 하면 처음부터 다시 스캔합니다.`,
   );
 }

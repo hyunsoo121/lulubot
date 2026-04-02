@@ -14,6 +14,15 @@ function scanCooldownKey(discordUserId: bigint) {
   return `scan:cooldown:${discordUserId}`;
 }
 
+/** 봇 재시작 시 남아있는 스캔 락을 모두 제거 */
+export async function clearAllScanLocks(): Promise<void> {
+  const keys = await redis.keys('scan:lock:*');
+  if (keys.length > 0) {
+    await redis.del(...keys);
+    console.log(`[matchScan] 재시작으로 인해 스캔 락 ${keys.length}개 초기화`);
+  }
+}
+
 export async function isScanningUser(discordUserId: bigint): Promise<boolean> {
   const val = await redis.get(scanLockKey(discordUserId));
   return val !== null;
@@ -150,7 +159,10 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
 }
 
 /** 특정 유저(discordUserId 기준)의 전체 매치를 스캔해서 저장 */
-export async function scanMatchesByUser(discordUserId: bigint): Promise<ScanResult> {
+export async function scanMatchesByUser(
+  discordUserId: bigint,
+  guildServerId?: bigint,
+): Promise<ScanResult> {
   const locked = await acquireScanLock(discordUserId);
   if (!locked) {
     throw new Error('SCAN_IN_PROGRESS');
@@ -161,6 +173,20 @@ export async function scanMatchesByUser(discordUserId: bigint): Promise<ScanResu
       where: { discordUserId },
       include: { lolAccounts: true },
     });
+
+    // 서버 연결이 끊겼으면 복구 (데이터 초기화 후 재갱신 시)
+    if (user && guildServerId) {
+      await prisma.guildServer.upsert({
+        where: { id: guildServerId },
+        update: {},
+        create: { id: guildServerId },
+      });
+      await prisma.userGuildServer.upsert({
+        where: { userId_guildServerId: { userId: user.id, guildServerId } },
+        update: {},
+        create: { userId: user.id, guildServerId },
+      });
+    }
 
     if (!user || user.lolAccounts.length === 0) {
       throw new Error('등록된 라이엇 계정이 없습니다. `/등록` 먼저 해주세요.');
@@ -174,12 +200,12 @@ export async function scanMatchesByUser(discordUserId: bigint): Promise<ScanResu
       orderBy: { matchRecord: { playedAt: 'desc' } },
     });
 
-    // 마지막 저장 매치 이후만 조회 (최초 스캔이면 startTime 없음 → 전체)
+    // 마지막 저장 매치 이후만 조회. 최초 스캔이면 전체 기간 탐색
     const startTime = latestStat
       ? Math.floor(latestStat.matchRecord.playedAt.getTime() / 1000)
       : undefined;
 
-    const isFirstScan = startTime === undefined;
+    const isFirstScan = !latestStat;
 
     const matchIdSet = new Set<string>();
     for (const account of user.lolAccounts) {
@@ -196,8 +222,9 @@ export async function scanMatchesByUser(discordUserId: bigint): Promise<ScanResu
         const wasSaved = await saveMatch(matchId, null);
         if (wasSaved) saved++;
         else skipped++;
-        await sleep(100);
-      } catch {
+        await sleep(1200);
+      } catch (err) {
+        console.error(`[matchScan] saveMatch 실패 matchId=${matchId}:`, err);
         skipped++;
       }
     }

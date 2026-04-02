@@ -13,7 +13,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const guildServerId = BigInt(interaction.guildId!);
 
-  // GuildServer 없으면 생성
   await prisma.guildServer.upsert({
     where: { id: guildServerId },
     update: {},
@@ -29,15 +28,30 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const rows = entries.map(({ account, stat }, i) => {
-    const medal = MEDALS[i] ?? `**${i + 1}.**`;
-    if (!stat || stat.totalGames === 0) {
-      return `${medal} **${account.gameName}#${account.tagLine}**　*전적 없음 — /전적갱신 필요*`;
-    }
-    const wr = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
-    const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(2);
-    return `${medal} **${account.gameName}#${account.tagLine}**　${wr}% (${stat.totalWins}승 ${stat.totalGames - stat.totalWins}패)　KDA ${kda}`;
-  });
+  const rows = await Promise.all(
+    entries.map(async ({ discordUserId, accounts, stat }, i) => {
+      const medal = MEDALS[i] ?? `**${i + 1}.**`;
+
+      // Discord 멤버 표시 이름 조회
+      let memberName: string;
+      try {
+        const member = await interaction.guild!.members.fetch(discordUserId.toString());
+        memberName = member.displayName;
+      } catch {
+        memberName = '어나니머스';
+      }
+
+      const accountsStr = accounts.map((a) => `${a.gameName}#${a.tagLine}`).join(', ');
+
+      if (!stat || stat.totalGames === 0) {
+        return `${medal} **${memberName}** (${accountsStr})　*전적 없음 — /전적갱신 필요*`;
+      }
+
+      const wr = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
+      const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(2);
+      return `${medal} **${memberName}** (${accountsStr})　${wr}% (${stat.totalWins}승 ${stat.totalGames - stat.totalWins}패)　KDA ${kda}`;
+    }),
+  );
 
   const embed = new EmbedBuilder()
     .setTitle('🏆 서버 랭킹')
