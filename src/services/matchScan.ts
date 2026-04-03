@@ -34,7 +34,9 @@ export async function clearAllScanLocks(): Promise<void> {
       await prisma.userGlobalStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
       await prisma.playerMatchStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
       await prisma.matchRecord.deleteMany({ where: { playerStats: { none: {} } } });
-      console.log(`[matchScan] 중단된 스캔 감지 (${discordUserId}) → 데이터 초기화, 다음 갱신 시 전체 재스캔`);
+      console.log(
+        `[matchScan] 중단된 스캔 감지 (${discordUserId}) → 데이터 초기화, 다음 갱신 시 전체 재스캔`,
+      );
     }
   }
 
@@ -83,10 +85,6 @@ function getMvpPuuid(participants: RiotMatchParticipant[]): string {
 
 /** 매치 1건 저장 및 통계 업데이트 */
 async function saveMatch(matchId: string, guildServerId: bigint | null): Promise<boolean> {
-  // 이미 저장된 매치 스킵
-  const existing = await prisma.matchRecord.findUnique({ where: { matchId } });
-  if (existing) return false;
-
   const riot = await getMatch(matchId);
   const { info } = riot;
 
@@ -102,9 +100,11 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
   const accounts = await prisma.lolAccount.findMany({ where: { puuid: { in: puuids } } });
   const accountMap = new Map(accounts.map((a) => [a.puuid, a]));
 
-  // MatchRecord 생성
-  const match = await prisma.matchRecord.create({
-    data: {
+  // MatchRecord upsert (다른 유저가 이미 저장했을 수 있음)
+  const match = await prisma.matchRecord.upsert({
+    where: { matchId },
+    update: {},
+    create: {
       matchId,
       guildServerId,
       winnerTeam: winnerTeam as 'BLUE' | 'RED',
@@ -113,9 +113,16 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
     },
   });
 
-  // PlayerMatchStat 생성 (등록된 유저만)
+  // 이미 PlayerMatchStat이 있는 lolAccountId 조회
+  const existingStats = await prisma.playerMatchStat.findMany({
+    where: { matchId: match.id },
+    select: { lolAccountId: true },
+  });
+  const existingAccountIds = new Set(existingStats.map((s) => s.lolAccountId));
+
+  // 아직 저장 안 된 유저만 삽입
   const statInserts = info.participants
-    .filter((p) => accountMap.has(p.puuid))
+    .filter((p) => accountMap.has(p.puuid) && !existingAccountIds.has(accountMap.get(p.puuid)!.id))
     .map((p) => {
       const account = accountMap.get(p.puuid)!;
       return {
@@ -137,14 +144,15 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
       };
     });
 
-  if (statInserts.length > 0) {
-    await prisma.playerMatchStat.createMany({ data: statInserts });
-  }
+  if (statInserts.length === 0) return false;
 
-  // UserGlobalStat 업데이트
+  await prisma.playerMatchStat.createMany({ data: statInserts });
+
+  // UserGlobalStat 업데이트 (새로 삽입된 유저만)
+  const newAccountIds = new Set(statInserts.map((s) => s.lolAccountId));
   for (const p of info.participants) {
     const account = accountMap.get(p.puuid);
-    if (!account) continue;
+    if (!account || !newAccountIds.has(account.id)) continue;
 
     await prisma.userGlobalStat.upsert({
       where: { lolAccountId: account.id },
