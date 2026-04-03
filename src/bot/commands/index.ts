@@ -12,6 +12,7 @@ import * as ranking from './stats/ranking';
 import * as scan from './stats/scan';
 import * as globalRecord from './stats/globalRecord';
 import * as recentMatch from './stats/recentMatch';
+import * as deleteAccount from './account/deleteAccount';
 import * as reset from './admin/reset';
 
 interface Command {
@@ -30,6 +31,7 @@ const commandList: Command[] = [
   scan,
   globalRecord,
   recentMatch,
+  deleteAccount,
   reset,
 ];
 

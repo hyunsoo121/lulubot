@@ -5,12 +5,7 @@ import { scanMatchesByUser } from '../../../services/matchScan';
 export const data = new SlashCommandBuilder()
   .setName('계정등록')
   .setDescription('라이엇 계정을 연결합니다.')
-  .addUserOption((option) =>
-    option
-      .setName('유저')
-      .setDescription('등록할 유저')
-      .setRequired(true),
-  )
+  .addUserOption((option) => option.setName('유저').setDescription('등록할 유저').setRequired(true))
   .addStringOption((option) =>
     option
       .setName('닉네임태그')
@@ -66,7 +61,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
     if (message.includes('Riot')) {
-      await interaction.editReply('❌ 존재하지 않는 계정입니다. 닉네임과 태그를 다시 확인해주세요.');
+      await interaction.editReply(
+        '❌ 존재하지 않는 계정입니다. 닉네임과 태그를 다시 확인해주세요.',
+      );
     } else {
       await interaction.editReply(`❌ ${message}`);
     }
