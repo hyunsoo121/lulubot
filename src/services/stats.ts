@@ -48,7 +48,7 @@ export async function getGlobalStatByDiscordId(discordUserId: bigint) {
 }
 
 /** 서버 등록 유저의 글로벌 랭킹 (유저 단위 합산) */
-export async function getServerRanking(guildServerId: bigint, limit = 10) {
+export async function getServerRanking(guildServerId: bigint) {
   const users = await prisma.user.findMany({
     where: {
       userGuildServers: { some: { guildServerId } },
@@ -82,8 +82,6 @@ export async function getServerRanking(guildServerId: bigint, limit = 10) {
       const kdaB = (b.stat.totalKills + b.stat.totalAssists) / Math.max(b.stat.totalDeaths, 1);
       return kdaB - kdaA;
     })
-    .slice(0, limit);
-
   return entries;
 }
 

@@ -21,8 +21,8 @@ export async function registerAccount(
     if (existing.user?.discordUserId && existing.user.discordUserId !== discordUserId) {
       throw new Error('이미 다른 유저가 등록한 계정입니다.');
     }
-    // 본인이 이미 등록한 경우 → 서버 연결만 추가하고 반환
-    if (existing.user?.discordUserId === discordUserId) {
+    // 본인이 이미 등록한 경우 (userId=null로 해제된 경우 제외) → 서버 연결만 추가하고 반환
+    if (existing.userId !== null && existing.user?.discordUserId === discordUserId) {
       if (guildServerId) {
         await prisma.guildServer.upsert({
           where: { id: guildServerId },

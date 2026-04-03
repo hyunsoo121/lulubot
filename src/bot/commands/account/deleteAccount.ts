@@ -5,14 +5,9 @@ import { getAccountByDiscordId } from '../../../services/account';
 export const data = new SlashCommandBuilder()
   .setName('계정삭제')
   .setDescription('이 서버에서 라이엇 계정 연결을 해제합니다.')
-  .addUserOption((option) =>
-    option.setName('유저').setDescription('삭제할 유저').setRequired(true),
-  )
+  .addUserOption((option) => option.setName('유저').setDescription('삭제할 유저').setRequired(true))
   .addStringOption((option) =>
-    option
-      .setName('닉네임태그')
-      .setDescription('삭제할 계정 (예: 롤닉#KR1)')
-      .setRequired(true),
+    option.setName('닉네임태그').setDescription('삭제할 계정 (예: 롤닉#KR1)').setRequired(true),
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
