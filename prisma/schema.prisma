@@ -116,22 +116,38 @@ model MatchRecord {
 }
 
 model PlayerMatchStat {
-  id           BigInt  @id @default(autoincrement())
-  matchId      BigInt  @map("match_id")
-  lolAccountId BigInt  @map("lol_account_id")
-  team         Team
-  championId   Int     @map("champion_id")
-  position     String  @db.VarChar(20)
-  kills        Int
-  deaths       Int
-  assists      Int
-  cs           Int
-  damageDealt  Int     @map("damage_dealt")
-  damageTaken  Int     @map("damage_taken")
-  goldEarned   Int     @map("gold_earned")
-  visionScore  Int     @map("vision_score")
-  isWin        Boolean @map("is_win")
-  isMvp        Boolean @default(false) @map("is_mvp")
+  id                  BigInt  @id @default(autoincrement())
+  matchId             BigInt  @map("match_id")
+  lolAccountId        BigInt  @map("lol_account_id")
+  team                Team
+  championId          Int     @map("champion_id")
+  position            String  @db.VarChar(20)
+  kills               Int
+  deaths              Int
+  assists             Int
+  cs                  Int
+  damageDealt         Int     @map("damage_dealt")
+  damageTaken         Int     @map("damage_taken")
+  goldEarned          Int     @map("gold_earned")
+  visionScore         Int     @map("vision_score")
+  isWin               Boolean @map("is_win")
+  isMvp               Boolean @default(false) @map("is_mvp")
+  turretKills         Int     @default(0) @map("turret_kills")
+  inhibitorKills      Int     @default(0) @map("inhibitor_kills")
+  firstBloodKill      Boolean @default(false) @map("first_blood_kill")
+  pentaKills          Int     @default(0) @map("penta_kills")
+  quadraKills         Int     @default(0) @map("quadra_kills")
+  tripleKills         Int     @default(0) @map("triple_kills")
+  doubleKills         Int     @default(0) @map("double_kills")
+  enemyJungleMinions  Int     @default(0) @map("enemy_jungle_minions")
+  objectivesStolen    Int     @default(0) @map("objectives_stolen")
+  healsOnTeammates    Int     @default(0) @map("heals_on_teammates")
+  shieldOnTeammates   Int     @default(0) @map("shield_on_teammates")
+  ccTime              Int     @default(0) @map("cc_time")
+  dragonKills         Int     @default(0) @map("dragon_kills")
+  baronKills          Int     @default(0) @map("baron_kills")
+  wardsPlaced         Int     @default(0) @map("wards_placed")
+  wardsKilled         Int     @default(0) @map("wards_killed")
 
   matchRecord MatchRecord @relation(fields: [matchId], references: [id])
   lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])

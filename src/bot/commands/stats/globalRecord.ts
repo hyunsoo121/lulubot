@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import { getGlobalStatByDiscordId } from '../../../services/stats';
+import { getChampionName } from '../../../lib/championNames';
 
 export const data = new SlashCommandBuilder()
   .setName('전체전적')
@@ -16,13 +17,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (!result || !result.stat) {
     await interaction.editReply(
       target.id === interaction.user.id
-        ? '등록된 계정이 없거나 전적 데이터가 없습니다. `/등록` 후 `/전적갱신` 을 해주세요.'
+        ? '등록된 계정이 없거나 전적 데이터가 없습니다. `/계정등록` 후 `/전적갱신` 을 해주세요.'
         : `${target.displayName} 님의 전적 데이터가 없습니다.`,
     );
     return;
   }
 
-  const { accounts, stat } = result;
+  const { accounts, stat, mostChampions } = result;
   const accountsStr = accounts.map((a) => `${a.gameName}#${a.tagLine}`).join(', ');
   const winRate = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
   const kda =
@@ -32,6 +33,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const avgKills = (stat.totalKills / stat.totalGames).toFixed(1);
   const avgDeaths = (stat.totalDeaths / stat.totalGames).toFixed(1);
   const avgAssists = (stat.totalAssists / stat.totalGames).toFixed(1);
+
+  const mostChampStr = await Promise.all(
+    mostChampions.map(async (c, i) => {
+      const name = await getChampionName(c.championId);
+      const wr = ((c.wins / c.games) * 100).toFixed(0);
+      const kda = c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(2) : 'Perfect';
+      return `${i + 1}. **${name}** ${c.games}판 ${wr}% KDA ${kda}`;
+    }),
+  );
 
   const embed = new EmbedBuilder()
     .setTitle(`${accountsStr} 전체 전적`)
@@ -50,6 +60,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     )
     .setFooter({ text: '전체 서버 커스텀 게임 기준 · 모든 등록 계정 합산' })
     .setTimestamp();
+
+  if (mostChampStr.length > 0) {
+    embed.addFields({ name: '모스트 챔피언', value: mostChampStr.join('\n'), inline: false });
+  }
 
   await interaction.editReply({ embeds: [embed] });
 }

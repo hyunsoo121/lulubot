@@ -43,7 +43,9 @@ async function buildRows(
       }
 
       const wr = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
-      const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(2);
+      const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(
+        2,
+      );
       return `${medal} **${memberName}** (${accountsStr})　${wr}% (${stat.totalWins}승 ${stat.totalGames - stat.totalWins}패)　KDA ${kda}`;
     }),
   );
@@ -54,7 +56,9 @@ function buildEmbed(rows: string[], page: number, totalPages: number) {
     .setTitle('🏆 서버 랭킹')
     .setDescription(rows.join('\n'))
     .setColor(0xffd700)
-    .setFooter({ text: `전체 커스텀 게임 기준 · 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지` })
+    .setFooter({
+      text: `전체 커스텀 게임 기준 · 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지`,
+    })
     .setTimestamp();
 }
 

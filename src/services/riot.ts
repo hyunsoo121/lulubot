@@ -69,3 +69,22 @@ export async function getAllMatchIds(puuid: string, startTime?: number): Promise
 export async function getMatch(matchId: string): Promise<RiotMatch> {
   return riotGet<RiotMatch>(`https://asia.api.riotgames.com/lol/match/v5/matches/${matchId}`);
 }
+
+export interface RiotLeagueEntry {
+  queueType: 'RANKED_SOLO_5x5' | 'RANKED_FLEX_SR';
+  tier: string;
+  rank: string;
+  leaguePoints: number;
+  wins: number;
+  losses: number;
+}
+
+export async function getRankedInfo(puuid: string): Promise<RiotLeagueEntry[]> {
+  try {
+    return await riotGet<RiotLeagueEntry[]>(
+      `https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`,
+    );
+  } catch {
+    return [];
+  }
+}
