@@ -18,10 +18,7 @@ export const data = new SlashCommandBuilder()
 
 const PAGE_SIZE = 5;
 
-async function buildRows(
-  champions: Awaited<ReturnType<typeof getMostChampions>>,
-  offset: number,
-) {
+async function buildRows(champions: Awaited<ReturnType<typeof getMostChampions>>, offset: number) {
   const page = champions.slice(offset, offset + PAGE_SIZE);
   return Promise.all(
     page.map(async (c, i) => {

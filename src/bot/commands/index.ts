@@ -13,8 +13,10 @@ import * as scan from './stats/scan';
 import * as globalRecord from './stats/globalRecord';
 import * as recentMatch from './stats/recentMatch';
 import * as mostChampions from './stats/mostChampions';
+import * as titles from './stats/titles';
 import * as deleteAccount from './account/deleteAccount';
 import * as reset from './admin/reset';
+import * as scanAll from './admin/scanAll';
 
 interface Command {
   data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
@@ -33,8 +35,10 @@ const commandList: Command[] = [
   globalRecord,
   recentMatch,
   mostChampions,
+  titles,
   deleteAccount,
   reset,
+  scanAll,
 ];
 
 for (const command of commandList) {

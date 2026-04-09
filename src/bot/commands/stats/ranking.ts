@@ -7,6 +7,7 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { getServerRanking } from '../../../services/stats';
+import { getTitlesForAccount } from '../../../services/titleService';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
@@ -19,6 +20,7 @@ const PAGE_SIZE = 10;
 async function buildRows(
   entries: Awaited<ReturnType<typeof getServerRanking>>,
   interaction: ChatInputCommandInteraction,
+  guildServerId: bigint,
   offset: number,
 ) {
   const page = entries.slice(offset, offset + PAGE_SIZE);
@@ -38,15 +40,19 @@ async function buildRows(
 
       const accountsStr = accounts.map((a) => `${a.gameName}#${a.tagLine}`).join(', ');
 
+      // 대표 칭호: 첫 번째 칭호만 표시
+      const titles = await getTitlesForAccount(accounts[0].id, guildServerId).catch(() => []);
+      const titleStr = titles.length > 0 ? ` ${titles[0].icon}${titles[0].name}` : '';
+
       if (!stat || stat.totalGames === 0) {
-        return `${medal} **${memberName}** (${accountsStr})　*전적 없음 — /전적갱신 필요*`;
+        return `${medal} **${memberName}**${titleStr} (${accountsStr})　*전적 없음 — /전적갱신 필요*`;
       }
 
       const wr = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
       const kda = ((stat.totalKills + stat.totalAssists) / Math.max(stat.totalDeaths, 1)).toFixed(
         2,
       );
-      return `${medal} **${memberName}** (${accountsStr})　${wr}% (${stat.totalWins}승 ${stat.totalGames - stat.totalWins}패)　KDA ${kda}`;
+      return `${medal} **${memberName}**${titleStr} (${accountsStr})　${wr}% (${stat.totalWins}승 ${stat.totalGames - stat.totalWins}패)　KDA ${kda}`;
     }),
   );
 }
@@ -100,7 +106,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const totalPages = Math.ceil(entries.length / PAGE_SIZE);
   let page = 0;
 
-  const rows = await buildRows(entries, interaction, page * PAGE_SIZE);
+  const rows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
   const message = await interaction.editReply({
     embeds: [buildEmbed(rows, page, totalPages)],
     components: totalPages > 1 ? [buildButtons(page, totalPages)] : [],
@@ -119,7 +125,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (btn.customId === 'ranking_prev') page--;
     if (btn.customId === 'ranking_next') page++;
 
-    const newRows = await buildRows(entries, interaction, page * PAGE_SIZE);
+    const newRows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
     await btn.update({
       embeds: [buildEmbed(newRows, page, totalPages)],
       components: [buildButtons(page, totalPages)],

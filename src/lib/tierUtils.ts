@@ -1,15 +1,30 @@
 import { RiotLeagueEntry } from '../services/riot';
 
 const TIER_ORDER = [
-  'IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM',
-  'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER',
+  'IRON',
+  'BRONZE',
+  'SILVER',
+  'GOLD',
+  'PLATINUM',
+  'EMERALD',
+  'DIAMOND',
+  'MASTER',
+  'GRANDMASTER',
+  'CHALLENGER',
 ];
 const RANK_ORDER = ['IV', 'III', 'II', 'I'];
 
 const TIER_KR: Record<string, string> = {
-  IRON: '아이언', BRONZE: '브론즈', SILVER: '실버', GOLD: '골드',
-  PLATINUM: '플래티넘', EMERALD: '에메랄드', DIAMOND: '다이아몬드',
-  MASTER: '마스터', GRANDMASTER: '그랜드마스터', CHALLENGER: '챌린저',
+  IRON: '아이언',
+  BRONZE: '브론즈',
+  SILVER: '실버',
+  GOLD: '골드',
+  PLATINUM: '플래티넘',
+  EMERALD: '에메랄드',
+  DIAMOND: '다이아몬드',
+  MASTER: '마스터',
+  GRANDMASTER: '그랜드마스터',
+  CHALLENGER: '챌린저',
 };
 
 export function tierScore(entry: RiotLeagueEntry): number {
@@ -31,6 +46,8 @@ export function getHighestEntry(
   queueType: 'RANKED_SOLO_5x5' | 'RANKED_FLEX_SR',
 ): RiotLeagueEntry | null {
   return (
-    entries.filter((e) => e.queueType === queueType).sort((a, b) => tierScore(b) - tierScore(a))[0] ?? null
+    entries
+      .filter((e) => e.queueType === queueType)
+      .sort((a, b) => tierScore(b) - tierScore(a))[0] ?? null
   );
 }

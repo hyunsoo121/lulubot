@@ -3,6 +3,7 @@ import { getGlobalStatByDiscordId } from '../../../services/stats';
 import { getChampionName } from '../../../lib/championNames';
 import { getRankedInfo, RiotLeagueEntry } from '../../../services/riot';
 import { tierScore, formatTier } from '../../../lib/tierUtils';
+import { getTitlesForDiscordUser } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('전적')
@@ -24,6 +25,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     );
     return;
   }
+
+  const guildServerId = interaction.guildId ? BigInt(interaction.guildId) : null;
 
   const { accounts, stat, mostChampions } = result;
   const winRate = ((stat.totalWins / stat.totalGames) * 100).toFixed(1);
@@ -98,6 +101,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (mostChampStr.length > 0) {
     embed.addFields({ name: '모스트 챔피언', value: mostChampStr.join('\n'), inline: false });
+  }
+
+  if (guildServerId) {
+    const titles = await getTitlesForDiscordUser(discordUserId, guildServerId);
+    if (titles.length > 0) {
+      const titleStr = titles.map((t) => `${t.icon} **${t.name}** — ${t.description}`).join('\n');
+      embed.addFields({ name: '보유 칭호', value: titleStr, inline: false });
+    }
   }
 
   await interaction.editReply({ embeds: [embed] });

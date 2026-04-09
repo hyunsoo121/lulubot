@@ -78,15 +78,17 @@ export async function getGlobalStatByDiscordId(discordUserId: bigint) {
         };
       }),
     )
-  ).sort((a, b) => {
-    if (b.games !== a.games) return b.games - a.games;
-    const wrA = a.wins / a.games;
-    const wrB = b.wins / b.games;
-    if (wrB !== wrA) return wrB - wrA;
-    const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
-    const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
-    return kdaB - kdaA;
-  }).slice(0, 3);
+  )
+    .sort((a, b) => {
+      if (b.games !== a.games) return b.games - a.games;
+      const wrA = a.wins / a.games;
+      const wrB = b.wins / b.games;
+      if (wrB !== wrA) return wrB - wrA;
+      const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
+      const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
+      return kdaB - kdaA;
+    })
+    .slice(0, 3);
 
   return {
     accounts,

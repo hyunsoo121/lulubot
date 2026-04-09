@@ -120,11 +120,19 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
   });
   const existingAccountIds = new Set(existingStats.map((s) => s.lolAccountId));
 
+  // 팀별 총 킬 계산 (killParticipation 산출용)
+  const teamKills = new Map<number, number>();
+  for (const p of info.participants) {
+    teamKills.set(p.teamId, (teamKills.get(p.teamId) ?? 0) + p.kills);
+  }
+
   // 아직 저장 안 된 유저만 삽입
   const statInserts = info.participants
     .filter((p) => accountMap.has(p.puuid) && !existingAccountIds.has(accountMap.get(p.puuid)!.id))
     .map((p) => {
       const account = accountMap.get(p.puuid)!;
+      const tk = teamKills.get(p.teamId) ?? 0;
+      const kp = tk > 0 ? (p.kills + p.assists) / tk : 0;
       return {
         matchId: match.id,
         lolAccountId: account.id,
@@ -141,6 +149,21 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         visionScore: p.visionScore,
         isWin: p.win,
         isMvp: p.puuid === mvpPuuid,
+        killParticipation: kp,
+        turretKills: p.turretKills ?? 0,
+        firstBloodKill: p.firstBloodKill ?? false,
+        pentaKills: p.pentaKills ?? 0,
+        quadraKills: p.quadraKills ?? 0,
+        dragonKills: p.dragonKills ?? 0,
+        baronKills: p.baronKills ?? 0,
+        wardsPlaced: p.wardsPlaced ?? 0,
+        wardsKilled: p.wardsKilled ?? 0,
+        timeCCingOthers: p.totalTimeCCingOthers ?? 0,
+        enemyJungleMinions: p.totalEnemyJungleMinionsKilled ?? 0,
+        objectivesStolen: p.objectivesStolen ?? 0,
+        healsOnTeammates: p.totalHealsOnTeammates ?? 0,
+        shieldOnTeammates: p.totalDamageShieldedOnTeammates ?? 0,
+        soloKills: p.challenges?.soloKills ?? 0,
       };
     });
 
@@ -236,8 +259,12 @@ export async function scanMatchesByUser(
 
     const matchIdSet = new Set<string>();
     for (const account of user.lolAccounts) {
-      const ids = await getAllMatchIds(account.puuid, startTime);
-      ids.forEach((id) => matchIdSet.add(id));
+      try {
+        const ids = await getAllMatchIds(account.puuid, startTime);
+        ids.forEach((id) => matchIdSet.add(id));
+      } catch (err) {
+        console.error(`[matchScan] 매치ID 조회 실패 puuid=${account.puuid}:`, err);
+      }
     }
 
     // 오래된 순서부터 저장 → 중단 시 다음 증분 스캔이 이어받을 수 있음

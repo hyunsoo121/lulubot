@@ -20,13 +20,18 @@ async function riotGet<T>(url: string, params?: Record<string, unknown>): Promis
       return data as T;
     } catch (err) {
       const axiosErr = err as AxiosError;
-      if (axiosErr.response?.status === 429) {
-        const retryAfter = Number(axiosErr.response.headers['retry-after'] ?? 10);
+      const status = axiosErr.response?.status;
+      if (status === 429) {
+        const retryAfter = Number(axiosErr.response!.headers['retry-after'] ?? 10);
         const waitMs = (retryAfter + 1) * 1000;
         console.warn(`[Riot] 429 rate limit — ${retryAfter}초 대기 (시도 ${attempt + 1}/5)`);
         await sleep(waitMs);
       } else {
-        throw err;
+        const body = axiosErr.response?.data
+          ? JSON.stringify(axiosErr.response.data)
+          : '(no body)';
+        console.error(`[Riot] HTTP ${status} — ${url} — ${body}`);
+        throw new Error(`Riot API 오류 (${status}): ${url}`);
       }
     }
   }

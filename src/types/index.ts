@@ -25,6 +25,21 @@ export interface RiotMatchParticipant {
   visionScore: number;
   win: boolean;
   pentaKills: number;
+  quadraKills: number;
+  turretKills: number;
+  firstBloodKill: boolean;
+  dragonKills: number;
+  baronKills: number;
+  wardsPlaced: number;
+  wardsKilled: number;
+  totalTimeCCingOthers: number;
+  totalEnemyJungleMinionsKilled: number;
+  objectivesStolen: number;
+  totalHealsOnTeammates: number;
+  totalDamageShieldedOnTeammates: number;
+  challenges?: {
+    soloKills?: number;
+  };
 }
 
 export interface RiotMatchInfo {

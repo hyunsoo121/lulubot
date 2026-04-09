@@ -1,5 +1,6 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { scanMatchesByUser, isScanningUser, getScanCooldown } from '../../../services/matchScan';
+import { scanMatchesByUser, isScanningUser } from '../../../services/matchScan';
+import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('전적갱신')
@@ -24,25 +25,21 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  // 쿨다운 체크
-  const cooldown = await getScanCooldown(discordUserId);
-  if (cooldown > 0) {
-    const minutes = Math.ceil(cooldown / 60);
-    const seconds = cooldown % 60;
-    const timeStr = minutes > 1 ? `${minutes}분 ${seconds}초` : `${seconds}초`;
-    await interaction.reply({
-      content: `⏳ ${targetLabel} 갱신은 3분에 한 번만 가능합니다. **${timeStr}** 후에 다시 시도해주세요.`,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
   await interaction.deferReply();
 
   try {
     const notice = await interaction.editReply(`🔍 ${targetLabel} 전적 갱신 중...`);
 
     const result = await scanMatchesByUser(discordUserId, guildServerId);
+
+    // 칭호 재계산
+    if (guildServerId) {
+      try {
+        await recalculateTitles(guildServerId);
+      } catch (e) {
+        console.error('[scan] 칭호 재계산 실패:', e);
+      }
+    }
 
     const header = result.isFirstScan
       ? `✅ ${targetLabel} 최초 전적 스캔 완료! (전체 기록 조회)`
