@@ -14,6 +14,7 @@ import * as globalRecord from './stats/globalRecord';
 import * as recentMatch from './stats/recentMatch';
 import * as mostChampions from './stats/mostChampions';
 import * as titles from './stats/titles';
+import * as laneRanking from './stats/laneRanking';
 import * as deleteAccount from './account/deleteAccount';
 import * as reset from './admin/reset';
 import * as scanAll from './admin/scanAll';
@@ -36,6 +37,7 @@ const commandList: Command[] = [
   recentMatch,
   mostChampions,
   titles,
+  laneRanking,
   deleteAccount,
   reset,
   scanAll,

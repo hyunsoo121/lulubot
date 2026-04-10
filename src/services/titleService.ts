@@ -13,6 +13,11 @@ export interface TitleHolder {
   value: number;
 }
 
+type PrismaGroupRow = {
+  lolAccountId: bigint;
+  _count: { id: number };
+} & Record<string, unknown>;
+
 const avg1 = (v: number) => `평균 ${v.toFixed(1)}`;
 const avg0 = (v: number) => `평균 ${Math.round(v)}`;
 const cnt = (v: number) => `${Math.round(v)}회`;
@@ -434,17 +439,18 @@ async function aggregateByAccount(
   where: Record<string, unknown> = {},
 ): Promise<GroupRow[]> {
   if (matchIds.length === 0) return [];
-  const rows = await (prisma as any).playerMatchStat.groupBy({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
     where: { matchId: { in: matchIds }, ...where },
     [`_${agg}`]: { [field]: true },
     _count: { id: true },
-  });
+  })) as PrismaGroupRow[];
   return rows
-    .filter((r: any) => r._count.id >= 3)
-    .map((r: any) => ({
-      lolAccountId: r.lolAccountId as bigint,
-      value: (r[`_${agg}`][field] as number) ?? 0,
+    .filter((r) => r._count.id >= 3)
+    .map((r) => ({
+      lolAccountId: r.lolAccountId,
+      value: (r[`_${agg}`] as Record<string, number>)?.[field] ?? 0,
     }));
 }
 
@@ -472,17 +478,18 @@ async function aggregateByPosition(
   minGames = 3,
 ): Promise<GroupRow[]> {
   if (matchIds.length === 0) return [];
-  const rows = await (prisma as any).playerMatchStat.groupBy({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
     where: { matchId: { in: matchIds }, position },
     [`_${agg}`]: { [field]: true },
     _count: { id: true },
-  });
+  })) as PrismaGroupRow[];
   return rows
-    .filter((r: any) => r._count.id >= minGames)
-    .map((r: any) => ({
-      lolAccountId: r.lolAccountId as bigint,
-      value: (r[`_${agg}`][field] as number) ?? 0,
+    .filter((r) => r._count.id >= minGames)
+    .map((r) => ({
+      lolAccountId: r.lolAccountId,
+      value: (r[`_${agg}`] as Record<string, number>)?.[field] ?? 0,
     }));
 }
 
@@ -546,14 +553,15 @@ async function countCondition(
   where: Record<string, unknown>,
 ): Promise<GroupRow[]> {
   if (matchIds.length === 0) return [];
-  const rows = await (prisma as any).playerMatchStat.groupBy({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
     where: { matchId: { in: matchIds }, ...where },
     _count: { id: true },
-  });
-  return rows.map((r: any) => ({
-    lolAccountId: r.lolAccountId as bigint,
-    value: r._count.id as number,
+  })) as PrismaGroupRow[];
+  return rows.map((r) => ({
+    lolAccountId: r.lolAccountId,
+    value: r._count.id,
   }));
 }
 
@@ -788,14 +796,15 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   ]);
 
   // 개근상: 게임 수가 가장 많은 계정 (동점 포함)
-  const gameCounts = await (prisma as any).playerMatchStat.groupBy({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gameCounts = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
     where: { matchId: { in: matchIds } },
     _count: { id: true },
-  });
-  const gameCountRows: GroupRow[] = gameCounts.map((r: any) => ({
-    lolAccountId: r.lolAccountId as bigint,
-    value: r._count.id as number,
+  })) as PrismaGroupRow[];
+  const gameCountRows: GroupRow[] = gameCounts.map((r) => ({
+    lolAccountId: r.lolAccountId,
+    value: r._count.id,
   }));
   const mostGamesIds = topAllBy(gameCountRows, 'desc');
 

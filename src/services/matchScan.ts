@@ -1,7 +1,6 @@
 import prisma from '../lib/prisma';
 import redis from '../lib/redis';
 import { getAllMatchIds, getMatch, sleep } from './riot';
-import { RiotMatchParticipant } from '../types';
 
 const SCAN_LOCK_TTL = 60 * 30; // 30분 (최대 스캔 시간)
 const SCAN_COOLDOWN_TTL = 60 * 3; // 3분 쿨다운
