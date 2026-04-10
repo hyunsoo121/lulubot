@@ -74,15 +74,6 @@ export interface ScanResult {
   isFirstScan: boolean;
 }
 
-/** MVP 판정: 승리팀 중 챔피언 딜 1위. 승리팀 없으면 전체에서 딜 1위 */
-function getMvpPuuid(participants: RiotMatchParticipant[]): string {
-  const candidates = participants.filter((p) => p.win);
-  const pool = candidates.length > 0 ? candidates : participants;
-  return pool.reduce((best, p) =>
-    p.totalDamageDealtToChampions > best.totalDamageDealtToChampions ? p : best,
-  ).puuid;
-}
-
 /** 매치 1건 저장 및 통계 업데이트 */
 async function saveMatch(matchId: string, guildServerId: bigint | null): Promise<boolean> {
   const riot = await getMatch(matchId);
@@ -93,7 +84,6 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
 
   const winnerTeamId = info.teams.find((t) => t.win)?.teamId ?? 100;
   const winnerTeam = winnerTeamId === 100 ? 'BLUE' : 'RED';
-  const mvpPuuid = getMvpPuuid(info.participants);
 
   // PUUID → LolAccount 매핑
   const puuids = info.participants.map((p) => p.puuid);
@@ -148,7 +138,6 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         goldEarned: p.goldEarned,
         visionScore: p.visionScore,
         isWin: p.win,
-        isMvp: p.puuid === mvpPuuid,
         killParticipation: kp,
         turretKills: p.turretKills ?? 0,
         firstBloodKill: p.firstBloodKill ?? false,
@@ -188,7 +177,6 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         totalAssists: p.assists,
         totalDamage: p.totalDamageDealtToChampions,
         totalVisionScore: p.visionScore,
-        mvpCount: p.puuid === mvpPuuid ? 1 : 0,
         pentaKillCount: p.pentaKills > 0 ? 1 : 0,
       },
       update: {
@@ -199,7 +187,6 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         totalAssists: { increment: p.assists },
         totalDamage: { increment: p.totalDamageDealtToChampions },
         totalVisionScore: { increment: p.visionScore },
-        mvpCount: { increment: p.puuid === mvpPuuid ? 1 : 0 },
         pentaKillCount: { increment: p.pentaKills > 0 ? 1 : 0 },
       },
     });

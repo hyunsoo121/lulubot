@@ -45,8 +45,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         const pos = POSITION_KR[p.position] ?? p.position;
         const name = p.lolAccount.gameName;
         const kd = `${p.kills}/${p.deaths}/${p.assists}`;
-        const mvp = p.isMvp ? ' 👑' : '';
-        return `${pos} **${name}** ${kd}${mvp}`;
+        return `${pos} **${name}** ${kd}`;
       })
       .join('\n');
   }

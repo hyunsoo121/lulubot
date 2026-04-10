@@ -14,7 +14,9 @@ export const data = new SlashCommandBuilder()
   .setDescription('이 서버의 칭호 보유자 목록을 조회합니다.');
 
 type UserTitleWithAccount = Awaited<
-  ReturnType<typeof prisma.userTitle.findMany<{ include: { lolAccount: { include: { user: true } } } }>>
+  ReturnType<
+    typeof prisma.userTitle.findMany<{ include: { lolAccount: { include: { user: true } } } }>
+  >
 >[number];
 
 const CATEGORIES: { name: string; codes: string[] }[] = [
@@ -29,8 +31,17 @@ const CATEGORIES: { name: string; codes: string[] }[] = [
   {
     name: '🎲 기타',
     codes: [
-      '투명인간', '솔로킹', '흑백모니터',
-      '모범승객', '불사신', '개근상', '연승왕', '연패왕', '끈기왕', '속전속결', '신인왕',
+      '투명인간',
+      '솔로킹',
+      '흑백모니터',
+      '모범승객',
+      '불사신',
+      '개근상',
+      '연승왕',
+      '연패왕',
+      '끈기왕',
+      '속전속결',
+      '신인왕',
     ],
   },
   { name: '🏔️ 탑', codes: ['TOPKING', '전사왕', '고기방패', '고속도로건설자', '라인전의악마'] },
@@ -42,9 +53,9 @@ const CATEGORIES: { name: string; codes: string[] }[] = [
 
 // 카테고리를 페이지 단위로 묶음
 const PAGES: { name: string; codes: string[] }[][] = [
-  CATEGORIES.slice(0, 4),  // 전투, 딜/탱, 오브젝트, CS/경제
-  CATEGORIES.slice(4, 6),  // 시야, 기타
-  CATEGORIES.slice(6, 8),  // 탑, 정글
+  CATEGORIES.slice(0, 4), // 전투, 딜/탱, 오브젝트, CS/경제
+  CATEGORIES.slice(4, 6), // 시야, 기타
+  CATEGORIES.slice(6, 8), // 탑, 정글
   CATEGORIES.slice(8, 11), // 미드, 원딜, 서폿
 ];
 
@@ -72,7 +83,9 @@ async function buildEmbed(
     .setTitle('🏅 서버 칭호 보유자')
     .setColor(0x5865f2)
     .setTimestamp()
-    .setFooter({ text: `페이지 ${page + 1}/${PAGES.length} · /전적갱신 시 재계산 · 동점 시 공동 수상` });
+    .setFooter({
+      text: `페이지 ${page + 1}/${PAGES.length} · /전적갱신 시 재계산 · 동점 시 공동 수상`,
+    });
 
   for (const category of PAGES[page]) {
     const lines: string[] = [];
@@ -146,7 +159,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   collector.on('collect', async (btn) => {
     try {
       if (btn.user.id !== interaction.user.id) {
-        await btn.reply({ content: '본인이 실행한 명령어에만 사용할 수 있습니다.', ephemeral: true });
+        await btn.reply({
+          content: '본인이 실행한 명령어에만 사용할 수 있습니다.',
+          ephemeral: true,
+        });
         return;
       }
 

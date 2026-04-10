@@ -8,7 +8,6 @@ export interface AggregatedStat {
   totalAssists: number;
   totalDamage: bigint;
   totalVisionScore: number;
-  mvpCount: number;
   pentaKillCount: number;
 }
 
@@ -21,7 +20,6 @@ function mergeStats(stats: AggregatedStat[]): AggregatedStat {
     totalAssists: acc.totalAssists + s.totalAssists,
     totalDamage: acc.totalDamage + s.totalDamage,
     totalVisionScore: acc.totalVisionScore + s.totalVisionScore,
-    mvpCount: acc.mvpCount + s.mvpCount,
     pentaKillCount: acc.pentaKillCount + s.pentaKillCount,
   }));
 }

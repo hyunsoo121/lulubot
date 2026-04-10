@@ -23,69 +23,381 @@ const dmg = (v: number) => `평균 ${Math.round(v).toLocaleString()}`;
 
 export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   // 전투
-  학살자: { code: '학살자', name: '학살자', description: '평균 킬 1위', icon: '⚔️', formatValue: avg1 },
-  생존왕: { code: '생존왕', name: '생존왕', description: '평균 데스 최소', icon: '🛡️', formatValue: avg1 },
-  킹메이커: { code: '킹메이커', name: '킹메이커', description: '평균 어시스트 1위', icon: '👑', formatValue: avg1 },
-  퍼블전문가: { code: '퍼블전문가', name: '퍼블전문가', description: '퍼스트블러드 횟수 1위', icon: '🩸', formatValue: cnt },
-  펜타킬러: { code: '펜타킬러', name: '펜타킬러', description: '펜타킬 횟수 1위', icon: '💥', formatValue: cnt },
-  쿼드라킬러: { code: '쿼드라킬러', name: '쿼드라킬러', description: '쿼드라킬 횟수 1위', icon: '🔥', formatValue: cnt },
+  학살자: {
+    code: '학살자',
+    name: '학살자',
+    description: '평균 킬 1위',
+    icon: '⚔️',
+    formatValue: avg1,
+  },
+  생존왕: {
+    code: '생존왕',
+    name: '생존왕',
+    description: '평균 데스 최소',
+    icon: '🛡️',
+    formatValue: avg1,
+  },
+  킹메이커: {
+    code: '킹메이커',
+    name: '킹메이커',
+    description: '평균 어시스트 1위',
+    icon: '👑',
+    formatValue: avg1,
+  },
+  퍼블전문가: {
+    code: '퍼블전문가',
+    name: '퍼블전문가',
+    description: '퍼스트블러드 횟수 1위',
+    icon: '🩸',
+    formatValue: cnt,
+  },
+  펜타킬러: {
+    code: '펜타킬러',
+    name: '펜타킬러',
+    description: '펜타킬 횟수 1위',
+    icon: '💥',
+    formatValue: cnt,
+  },
+  쿼드라킬러: {
+    code: '쿼드라킬러',
+    name: '쿼드라킬러',
+    description: '쿼드라킬 횟수 1위',
+    icon: '🔥',
+    formatValue: cnt,
+  },
   // 딜/탱
-  DPM머신: { code: 'DPM머신', name: 'DPM머신', description: '평균 딜량 1위', icon: '💢', formatValue: dmg },
-  샌드백: { code: '샌드백', name: '샌드백', description: '평균 받은 피해 1위', icon: '🪨', formatValue: dmg },
-  철거왕: { code: '철거왕', name: '철거왕', description: '평균 포탑 파괴 횟수 1위', icon: '🏗️', formatValue: avg1 },
+  DPM머신: {
+    code: 'DPM머신',
+    name: 'DPM머신',
+    description: '평균 딜량 1위',
+    icon: '💢',
+    formatValue: dmg,
+  },
+  샌드백: {
+    code: '샌드백',
+    name: '샌드백',
+    description: '평균 받은 피해 1위',
+    icon: '🪨',
+    formatValue: dmg,
+  },
+  철거왕: {
+    code: '철거왕',
+    name: '철거왕',
+    description: '평균 포탑 파괴 횟수 1위',
+    icon: '🏗️',
+    formatValue: avg1,
+  },
   // 오브젝트
-  용사냥꾼: { code: '용사냥꾼', name: '용사냥꾼', description: '드래곤 처치 횟수 1위', icon: '🐉', formatValue: cnt },
-  바론사냥꾼: { code: '바론사냥꾼', name: '바론사냥꾼', description: '바론 처치 횟수 1위', icon: '👹', formatValue: cnt },
+  용사냥꾼: {
+    code: '용사냥꾼',
+    name: '용사냥꾼',
+    description: '드래곤 처치 횟수 1위',
+    icon: '🐉',
+    formatValue: cnt,
+  },
+  바론사냥꾼: {
+    code: '바론사냥꾼',
+    name: '바론사냥꾼',
+    description: '바론 처치 횟수 1위',
+    icon: '👹',
+    formatValue: cnt,
+  },
   // CS/경제
   CS왕: { code: 'CS왕', name: 'CS왕', description: '평균 CS 1위', icon: '🌾', formatValue: avg0 },
-  골드킹: { code: '골드킹', name: '골드킹', description: '평균 골드 획득 1위', icon: '💰', formatValue: dmg },
+  골드킹: {
+    code: '골드킹',
+    name: '골드킹',
+    description: '평균 골드 획득 1위',
+    icon: '💰',
+    formatValue: dmg,
+  },
   // 시야
-  만물의눈: { code: '만물의눈', name: '만물의 눈', description: '평균 시야점수 1위', icon: '👁️', formatValue: avg1 },
-  와드장인: { code: '와드장인', name: '와드장인', description: '평균 와드 설치 횟수 1위', icon: '🔦', formatValue: avg1 },
-  청소부: { code: '청소부', name: '청소부', description: '평균 와드 제거 횟수 1위', icon: '🧹', formatValue: avg1 },
-  타임스토프: { code: '타임스토프', name: '타임스토프', description: '평균 CC 시간 1위', icon: '⏱️', formatValue: avg1 },
+  만물의눈: {
+    code: '만물의눈',
+    name: '만물의 눈',
+    description: '평균 시야점수 1위',
+    icon: '👁️',
+    formatValue: avg1,
+  },
+  와드장인: {
+    code: '와드장인',
+    name: '와드장인',
+    description: '평균 와드 설치 횟수 1위',
+    icon: '🔦',
+    formatValue: avg1,
+  },
+  청소부: {
+    code: '청소부',
+    name: '청소부',
+    description: '평균 와드 제거 횟수 1위',
+    icon: '🧹',
+    formatValue: avg1,
+  },
+  타임스토프: {
+    code: '타임스토프',
+    name: '타임스토프',
+    description: '평균 CC 시간 1위',
+    icon: '⏱️',
+    formatValue: avg1,
+  },
   // 기타
-  투명인간: { code: '투명인간', name: '투명인간', description: '평균 킬관여율 최하위', icon: '👻', formatValue: pct },
-  솔로킹: { code: '솔로킹', name: '솔로킹', description: '솔로킬 횟수 1위', icon: '🗡️', formatValue: cnt },
-  흑백모니터: { code: '흑백모니터', name: '흑백모니터', description: '총 데스 1위', icon: '💀', formatValue: cnt },
-  모범승객: { code: '모범승객', name: '모범승객', description: '낮은 킬관여율이면서 이긴 횟수 1위', icon: '🚌', formatValue: games },
-  불사신: { code: '불사신', name: '불사신', description: 'KDA Perfect로 이긴 횟수 1위', icon: '✨', formatValue: games },
-  개근상: { code: '개근상', name: '개근상', description: '가장 많은 게임 수', icon: '🎖️', formatValue: games },
-  연승왕: { code: '연승왕', name: '연승왕', description: '최장 연승 기록', icon: '🏆', formatValue: streak },
-  연패왕: { code: '연패왕', name: '연패왕', description: '최장 연패 기록', icon: '📉', formatValue: streak },
-  끈기왕: { code: '끈기왕', name: '끈기왕', description: '40분 이상 게임에서 이긴 횟수 1위', icon: '⏳', formatValue: games },
-  속전속결: { code: '속전속결', name: '속전속결', description: '25분 이하 게임에서 이긴 횟수 1위', icon: '⚡', formatValue: games },
-  신인왕: { code: '신인왕', name: '신인왕', description: '첫 10게임 승률 1위', icon: '🌟', formatValue: pct },
+  투명인간: {
+    code: '투명인간',
+    name: '투명인간',
+    description: '평균 킬관여율 최하위',
+    icon: '👻',
+    formatValue: pct,
+  },
+  솔로킹: {
+    code: '솔로킹',
+    name: '솔로킹',
+    description: '솔로킬 횟수 1위',
+    icon: '🗡️',
+    formatValue: cnt,
+  },
+  흑백모니터: {
+    code: '흑백모니터',
+    name: '흑백모니터',
+    description: '총 데스 1위',
+    icon: '💀',
+    formatValue: cnt,
+  },
+  모범승객: {
+    code: '모범승객',
+    name: '모범승객',
+    description: '낮은 킬관여율이면서 이긴 횟수 1위',
+    icon: '🚌',
+    formatValue: games,
+  },
+  불사신: {
+    code: '불사신',
+    name: '불사신',
+    description: 'KDA Perfect로 이긴 횟수 1위',
+    icon: '✨',
+    formatValue: games,
+  },
+  개근상: {
+    code: '개근상',
+    name: '개근상',
+    description: '가장 많은 게임 수',
+    icon: '🎖️',
+    formatValue: games,
+  },
+  연승왕: {
+    code: '연승왕',
+    name: '연승왕',
+    description: '최장 연승 기록',
+    icon: '🏆',
+    formatValue: streak,
+  },
+  연패왕: {
+    code: '연패왕',
+    name: '연패왕',
+    description: '최장 연패 기록',
+    icon: '📉',
+    formatValue: streak,
+  },
+  끈기왕: {
+    code: '끈기왕',
+    name: '끈기왕',
+    description: '40분 이상 게임에서 이긴 횟수 1위',
+    icon: '⏳',
+    formatValue: games,
+  },
+  속전속결: {
+    code: '속전속결',
+    name: '속전속결',
+    description: '25분 이하 게임에서 이긴 횟수 1위',
+    icon: '⚡',
+    formatValue: games,
+  },
+  신인왕: {
+    code: '신인왕',
+    name: '신인왕',
+    description: '첫 10게임 승률 1위',
+    icon: '🌟',
+    formatValue: pct,
+  },
   // 탑
-  TOPKING: { code: 'TOPKING', name: 'TOPKING', description: '탑 포지션 승률 1위', icon: '🏅', formatValue: pct },
-  전사왕: { code: '전사왕', name: '전사왕', description: '탑 킬관여율 1위', icon: '⚡', formatValue: pct },
-  고기방패: { code: '고기방패', name: '고기방패', description: '탑 평균 받은 피해 1위', icon: '🛡️', formatValue: dmg },
-  고속도로건설자: { code: '고속도로건설자', name: '고속도로건설자', description: '탑 포탑 파괴 1위', icon: '🔨', formatValue: avg1 },
-  라인전의악마: { code: '라인전의악마', name: '라인전의 악마', description: '탑 솔로킬 1위', icon: '😈', formatValue: cnt },
+  TOPKING: {
+    code: 'TOPKING',
+    name: 'TOPKING',
+    description: '탑 포지션 승률 1위',
+    icon: '🏅',
+    formatValue: pct,
+  },
+  전사왕: {
+    code: '전사왕',
+    name: '전사왕',
+    description: '탑 킬관여율 1위',
+    icon: '⚡',
+    formatValue: pct,
+  },
+  고기방패: {
+    code: '고기방패',
+    name: '고기방패',
+    description: '탑 평균 받은 피해 1위',
+    icon: '🛡️',
+    formatValue: dmg,
+  },
+  고속도로건설자: {
+    code: '고속도로건설자',
+    name: '고속도로건설자',
+    description: '탑 포탑 파괴 1위',
+    icon: '🔨',
+    formatValue: avg1,
+  },
+  라인전의악마: {
+    code: '라인전의악마',
+    name: '라인전의 악마',
+    description: '탑 솔로킬 1위',
+    icon: '😈',
+    formatValue: cnt,
+  },
   // 정글
-  JUGKING: { code: 'JUGKING', name: 'JUGKING', description: '정글 포지션 승률 1위', icon: '🏅', formatValue: pct },
-  포식자: { code: '포식자', name: '포식자', description: '정글 킬관여율 1위', icon: '🦁', formatValue: pct },
-  오브젝트마스터: { code: '오브젝트마스터', name: '오브젝트마스터', description: '정글 드래곤+바론 처치 합산 1위', icon: '🎮', formatValue: cnt },
-  작전명왕호야: { code: '작전명왕호야', name: '작전명왕호야', description: '정글 오브젝트 스틸 1위', icon: '🥷', formatValue: cnt },
-  대도둑: { code: '대도둑', name: '대도둑', description: '정글 카정 횟수 1위', icon: '🌲', formatValue: cnt },
+  JUGKING: {
+    code: 'JUGKING',
+    name: 'JUGKING',
+    description: '정글 포지션 승률 1위',
+    icon: '🏅',
+    formatValue: pct,
+  },
+  포식자: {
+    code: '포식자',
+    name: '포식자',
+    description: '정글 킬관여율 1위',
+    icon: '🦁',
+    formatValue: pct,
+  },
+  오브젝트마스터: {
+    code: '오브젝트마스터',
+    name: '오브젝트마스터',
+    description: '정글 드래곤+바론 처치 합산 1위',
+    icon: '🎮',
+    formatValue: cnt,
+  },
+  작전명왕호야: {
+    code: '작전명왕호야',
+    name: '작전명왕호야',
+    description: '정글 오브젝트 스틸 1위',
+    icon: '🥷',
+    formatValue: cnt,
+  },
+  대도둑: {
+    code: '대도둑',
+    name: '대도둑',
+    description: '정글 카정 횟수 1위',
+    icon: '🌲',
+    formatValue: cnt,
+  },
   // 미드
-  MIDKING: { code: 'MIDKING', name: 'MIDKING', description: '미드 포지션 승률 1위', icon: '🏅', formatValue: pct },
-  황족: { code: '황족', name: '황족', description: '미드 킬관여율 1위', icon: '👑', formatValue: pct },
-  미드DPM: { code: '미드DPM', name: '미드DPM', description: '미드 평균 딜 1위', icon: '💢', formatValue: dmg },
-  로밍킹: { code: '로밍킹', name: '로밍킹', description: '미드 평균 어시스트 1위', icon: '🏃', formatValue: avg1 },
-  미드솔로킬러: { code: '미드솔로킬러', name: '미드솔로킬러', description: '미드 솔로킬 횟수 1위', icon: '🗡️', formatValue: cnt },
+  MIDKING: {
+    code: 'MIDKING',
+    name: 'MIDKING',
+    description: '미드 포지션 승률 1위',
+    icon: '🏅',
+    formatValue: pct,
+  },
+  황족: {
+    code: '황족',
+    name: '황족',
+    description: '미드 킬관여율 1위',
+    icon: '👑',
+    formatValue: pct,
+  },
+  미드DPM: {
+    code: '미드DPM',
+    name: '미드DPM',
+    description: '미드 평균 딜 1위',
+    icon: '💢',
+    formatValue: dmg,
+  },
+  로밍킹: {
+    code: '로밍킹',
+    name: '로밍킹',
+    description: '미드 평균 어시스트 1위',
+    icon: '🏃',
+    formatValue: avg1,
+  },
+  미드솔로킬러: {
+    code: '미드솔로킬러',
+    name: '미드솔로킬러',
+    description: '미드 솔로킬 횟수 1위',
+    icon: '🗡️',
+    formatValue: cnt,
+  },
   // 원딜
-  ADKING: { code: 'ADKING', name: 'ADKING', description: '원딜 포지션 승률 1위', icon: '🏅', formatValue: pct },
-  해결사: { code: '해결사', name: '해결사', description: '원딜 킬관여율 1위', icon: '🎯', formatValue: pct },
-  금수저: { code: '금수저', name: '금수저', description: '원딜 평균 CS 1위', icon: '🥄', formatValue: avg0 },
-  평타싸개: { code: '평타싸개', name: '평타싸개', description: '원딜 딜량 1위', icon: '🏹', formatValue: dmg },
-  존윅: { code: '존윅', name: '존윅', description: '원딜 평균 데스 최소', icon: '🕶️', formatValue: avg1 },
+  ADKING: {
+    code: 'ADKING',
+    name: 'ADKING',
+    description: '원딜 포지션 승률 1위',
+    icon: '🏅',
+    formatValue: pct,
+  },
+  해결사: {
+    code: '해결사',
+    name: '해결사',
+    description: '원딜 킬관여율 1위',
+    icon: '🎯',
+    formatValue: pct,
+  },
+  금수저: {
+    code: '금수저',
+    name: '금수저',
+    description: '원딜 평균 CS 1위',
+    icon: '🥄',
+    formatValue: avg0,
+  },
+  평타싸개: {
+    code: '평타싸개',
+    name: '평타싸개',
+    description: '원딜 딜량 1위',
+    icon: '🏹',
+    formatValue: dmg,
+  },
+  존윅: {
+    code: '존윅',
+    name: '존윅',
+    description: '원딜 평균 데스 최소',
+    icon: '🕶️',
+    formatValue: avg1,
+  },
   // 서폿
-  SUPKING: { code: 'SUPKING', name: 'SUPKING', description: '서폿 포지션 승률 1위', icon: '🏅', formatValue: pct },
-  그림자: { code: '그림자', name: '그림자', description: '서폿 킬관여율 1위', icon: '🌑', formatValue: pct },
-  와드싸개: { code: '와드싸개', name: '와드싸개', description: '서폿 시야점수 1위', icon: '🔭', formatValue: avg1 },
-  경호원: { code: '경호원', name: '경호원', description: '팀원에게 준 실드 합산 1위', icon: '🛡️', formatValue: dmg },
-  베이비시터: { code: '베이비시터', name: '베이비시터', description: '팀원에게 준 힐 합산 1위', icon: '💊', formatValue: dmg },
+  SUPKING: {
+    code: 'SUPKING',
+    name: 'SUPKING',
+    description: '서폿 포지션 승률 1위',
+    icon: '🏅',
+    formatValue: pct,
+  },
+  그림자: {
+    code: '그림자',
+    name: '그림자',
+    description: '서폿 킬관여율 1위',
+    icon: '🌑',
+    formatValue: pct,
+  },
+  와드싸개: {
+    code: '와드싸개',
+    name: '와드싸개',
+    description: '서폿 시야점수 1위',
+    icon: '🔭',
+    formatValue: avg1,
+  },
+  경호원: {
+    code: '경호원',
+    name: '경호원',
+    description: '팀원에게 준 실드 합산 1위',
+    icon: '🛡️',
+    formatValue: dmg,
+  },
+  베이비시터: {
+    code: '베이비시터',
+    name: '베이비시터',
+    description: '팀원에게 준 힐 합산 1위',
+    icon: '💊',
+    formatValue: dmg,
+  },
 };
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -256,7 +568,12 @@ async function setTitleHolders(
   await prisma.userTitle.deleteMany({ where: { guildServerId, titleCode } });
   if (holders.length === 0) return;
   await prisma.userTitle.createMany({
-    data: holders.map((h) => ({ guildServerId, titleCode, lolAccountId: h.lolAccountId, statValue: h.value })),
+    data: holders.map((h) => ({
+      guildServerId,
+      titleCode,
+      lolAccountId: h.lolAccountId,
+      statValue: h.value,
+    })),
     skipDuplicates: true,
   });
 }
@@ -301,7 +618,6 @@ async function immortals(matchIds: bigint[]): Promise<TitleHolder[]> {
   const rows = await countCondition(matchIds, { isWin: true, deaths: 0 });
   return topAllBy(rows, 'desc');
 }
-
 
 // ─── main export ─────────────────────────────────────────────────────────────
 
@@ -506,7 +822,7 @@ export async function getTitlesForAccount(
 export async function getTitlesForDiscordUser(
   discordUserId: bigint,
   guildServerId: bigint,
-): Promise<TitleInfo[]> {
+): Promise<{ info: TitleInfo; statValue: number | null }[]> {
   const user = await prisma.user.findUnique({
     where: { discordUserId },
     include: { lolAccounts: true },
@@ -516,7 +832,14 @@ export async function getTitlesForDiscordUser(
   const titles = await prisma.userTitle.findMany({
     where: { lolAccountId: { in: accountIds }, guildServerId },
   });
-  return [
-    ...new Map(titles.map((t) => [t.titleCode, TITLE_DEFINITIONS[t.titleCode]])).values(),
-  ].filter(Boolean);
+  const seen = new Map<string, { info: TitleInfo; statValue: number | null }>();
+  for (const t of titles) {
+    if (!seen.has(t.titleCode) && TITLE_DEFINITIONS[t.titleCode]) {
+      seen.set(t.titleCode, {
+        info: TITLE_DEFINITIONS[t.titleCode],
+        statValue: t.statValue,
+      });
+    }
+  }
+  return [...seen.values()];
 }

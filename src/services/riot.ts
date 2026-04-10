@@ -87,7 +87,8 @@ export async function getRankedInfo(puuid: string): Promise<RiotLeagueEntry[]> {
     return await riotGet<RiotLeagueEntry[]>(
       `https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`,
     );
-  } catch {
+  } catch (err) {
+    console.warn(`[Riot] getRankedInfo 실패 puuid=${puuid}:`, err);
     return [];
   }
 }

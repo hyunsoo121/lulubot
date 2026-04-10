@@ -133,7 +133,6 @@ model PlayerMatchStat {
   goldEarned         Int     @map("gold_earned")
   visionScore        Int     @map("vision_score")
   isWin              Boolean @map("is_win")
-  isMvp              Boolean @default(false) @map("is_mvp")
   killParticipation  Float   @default(0) @map("kill_participation")
   turretKills        Int     @default(0) @map("turret_kills")
   firstBloodKill     Boolean @default(false) @map("first_blood_kill")
@@ -171,7 +170,6 @@ model UserServerStat {
   totalAssists     Int      @default(0) @map("total_assists")
   totalDamage      BigInt   @default(0) @map("total_damage")
   totalVisionScore Int      @default(0) @map("total_vision_score")
-  mvpCount         Int      @default(0) @map("mvp_count")
   pentaKillCount   Int      @default(0) @map("penta_kill_count")
   currentStreak    Int      @default(0) @map("current_streak")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -194,7 +192,6 @@ model UserGlobalStat {
   totalAssists     Int      @default(0) @map("total_assists")
   totalDamage      BigInt   @default(0) @map("total_damage")
   totalVisionScore Int      @default(0) @map("total_vision_score")
-  mvpCount         Int      @default(0) @map("mvp_count")
   pentaKillCount   Int      @default(0) @map("penta_kill_count")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

@@ -55,7 +55,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       },
       { name: 'KDA', value: kda, inline: true },
       { name: '평균 KDA', value: `${avgKills} / ${avgDeaths} / ${avgAssists}`, inline: true },
-      { name: 'MVP', value: `${stat.mvpCount}회`, inline: true },
       { name: '펜타킬', value: `${stat.pentaKillCount}회`, inline: true },
     )
     .setFooter({ text: '전체 서버 커스텀 게임 기준 · 모든 등록 계정 합산' })

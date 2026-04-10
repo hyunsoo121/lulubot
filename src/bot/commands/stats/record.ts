@@ -93,8 +93,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       },
       { name: 'KDA', value: kda, inline: true },
       { name: '평균 KDA', value: `${avgKills} / ${avgDeaths} / ${avgAssists}`, inline: true },
-      { name: 'MVP', value: `${stat.mvpCount}회`, inline: true },
-      { name: '펜타킬', value: `${stat.pentaKillCount}회`, inline: true },
     )
     .setFooter({ text: '전체 커스텀 게임 기준' })
     .setTimestamp();
@@ -106,7 +104,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (guildServerId) {
     const titles = await getTitlesForDiscordUser(discordUserId, guildServerId);
     if (titles.length > 0) {
-      const titleStr = titles.map((t) => `${t.icon} **${t.name}** — ${t.description}`).join('\n');
+      const titleStr = titles
+        .map(({ info, statValue }) => {
+          const valStr = statValue != null ? ` \`${info.formatValue(statValue)}\`` : '';
+          return `${info.icon} **${info.name}**${valStr} — ${info.description}`;
+        })
+        .join('\n');
       embed.addFields({ name: '보유 칭호', value: titleStr, inline: false });
     }
   }
