@@ -158,7 +158,7 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         baronKills: p.baronKills ?? 0,
         wardsPlaced: p.wardsPlaced ?? 0,
         wardsKilled: p.wardsKilled ?? 0,
-        timeCCingOthers: p.totalTimeCCingOthers ?? 0,
+        timeCCingOthers: p.timeCCingOthers ?? 0,
         enemyJungleMinions: p.totalEnemyJungleMinionsKilled ?? 0,
         objectivesStolen: p.objectivesStolen ?? 0,
         healsOnTeammates: p.totalHealsOnTeammates ?? 0,

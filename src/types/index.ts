@@ -32,7 +32,7 @@ export interface RiotMatchParticipant {
   baronKills: number;
   wardsPlaced: number;
   wardsKilled: number;
-  totalTimeCCingOthers: number;
+  timeCCingOthers: number;
   totalEnemyJungleMinionsKilled: number;
   objectivesStolen: number;
   totalHealsOnTeammates: number;

@@ -64,9 +64,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     done++;
-    await notice.edit(
-      `🔍 총 **${users.length}**명 순차 갱신 중... (${done}/${users.length})\n> 현재: ${accountLabel}`,
-    ).catch(() => {});
+    await notice
+      .edit(
+        `🔍 총 **${users.length}**명 순차 갱신 중... (${done}/${users.length})\n> 현재: ${accountLabel}`,
+      )
+      .catch(() => {});
   }
 
   // 칭호 재계산

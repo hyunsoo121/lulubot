@@ -266,6 +266,7 @@ model UserTitle {
   lolAccountId  BigInt   @map("lol_account_id")
   guildServerId BigInt   @map("guild_server_id")
   titleCode     String   @map("title_code") @db.VarChar(50)
+  statValue     Float?   @map("stat_value")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])

@@ -27,9 +27,7 @@ async function riotGet<T>(url: string, params?: Record<string, unknown>): Promis
         console.warn(`[Riot] 429 rate limit — ${retryAfter}초 대기 (시도 ${attempt + 1}/5)`);
         await sleep(waitMs);
       } else {
-        const body = axiosErr.response?.data
-          ? JSON.stringify(axiosErr.response.data)
-          : '(no body)';
+        const body = axiosErr.response?.data ? JSON.stringify(axiosErr.response.data) : '(no body)';
         console.error(`[Riot] HTTP ${status} — ${url} — ${body}`);
         throw new Error(`Riot API 오류 (${status}): ${url}`);
       }
