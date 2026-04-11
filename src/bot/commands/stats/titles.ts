@@ -34,7 +34,7 @@ const CATEGORIES: { name: string; codes: string[] }[] = [
       '투명인간',
       '솔로킹',
       '흑백모니터',
-      '모범승객',
+
       '불사신',
       '개근상',
       '연승왕',
@@ -154,7 +154,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     components: [buildButtons(page)],
   });
 
-  const collector = message.createMessageComponentCollector({ time: 60_000 });
+  const collector = message.createMessageComponentCollector({ time: 300_000 });
 
   collector.on('collect', async (btn) => {
     try {

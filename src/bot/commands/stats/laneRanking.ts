@@ -282,7 +282,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (totalPages <= 1) return;
 
-  const collector = message.createMessageComponentCollector({ time: 60_000 });
+  const collector = message.createMessageComponentCollector({ time: 300_000 });
 
   collector.on('collect', async (btn) => {
     try {

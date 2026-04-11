@@ -3,6 +3,17 @@ import { commands } from '../commands';
 
 export default function interactionCreateEvent(client: Client) {
   client.on(Events.InteractionCreate, async (interaction) => {
+    // autocomplete 처리
+    if (interaction.isAutocomplete()) {
+      const command = commands.get(interaction.commandName) as {
+        autocomplete?: (i: typeof interaction) => Promise<void>;
+      };
+      if (command?.autocomplete) {
+        await command.autocomplete(interaction).catch(console.error);
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = commands.get(interaction.commandName);

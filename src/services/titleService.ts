@@ -19,12 +19,12 @@ type PrismaGroupRow = {
 } & Record<string, unknown>;
 
 const avg1 = (v: number) => `평균 ${v.toFixed(1)}`;
-const avg0 = (v: number) => `평균 ${Math.round(v)}`;
 const cnt = (v: number) => `${Math.round(v)}회`;
 const games = (v: number) => `${Math.round(v)}판`;
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 const streak = (v: number) => `${Math.round(v)}연속`;
-const dmg = (v: number) => `평균 ${Math.round(v).toLocaleString()}`;
+const perMin = (v: number) => `${v.toFixed(1)}/분`;
+const perMinDmg = (v: number) => `${Math.round(v).toLocaleString()}/분`;
 
 export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   // 전투
@@ -74,16 +74,16 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   DPM머신: {
     code: 'DPM머신',
     name: 'DPM머신',
-    description: '평균 딜량 1위',
+    description: '분당 딜량 1위',
     icon: '💢',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   샌드백: {
     code: '샌드백',
     name: '샌드백',
-    description: '평균 받은 피해 1위',
+    description: '분당 받은 피해 1위',
     icon: '🪨',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   철거왕: {
     code: '철거왕',
@@ -108,42 +108,42 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
     formatValue: cnt,
   },
   // CS/경제
-  CS왕: { code: 'CS왕', name: 'CS왕', description: '평균 CS 1위', icon: '🌾', formatValue: avg0 },
+  CS왕: { code: 'CS왕', name: 'CS왕', description: '분당 CS 1위', icon: '🌾', formatValue: perMin },
   골드킹: {
     code: '골드킹',
     name: '골드킹',
-    description: '평균 골드 획득 1위',
+    description: '분당 골드 획득 1위',
     icon: '💰',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   // 시야
   만물의눈: {
     code: '만물의눈',
     name: '만물의 눈',
-    description: '평균 시야점수 1위',
+    description: '분당 시야점수 1위',
     icon: '👁️',
-    formatValue: avg1,
+    formatValue: perMin,
   },
   와드장인: {
     code: '와드장인',
     name: '와드장인',
-    description: '평균 와드 설치 횟수 1위',
+    description: '분당 와드 설치 1위',
     icon: '🔦',
-    formatValue: avg1,
+    formatValue: perMin,
   },
   청소부: {
     code: '청소부',
     name: '청소부',
-    description: '평균 와드 제거 횟수 1위',
+    description: '분당 와드 제거 1위',
     icon: '🧹',
-    formatValue: avg1,
+    formatValue: perMin,
   },
   타임스토프: {
     code: '타임스토프',
     name: '타임스토프',
-    description: '평균 CC 시간 1위',
+    description: '분당 CC시간 1위',
     icon: '⏱️',
-    formatValue: avg1,
+    formatValue: perMin,
   },
   // 기타
   투명인간: {
@@ -163,16 +163,9 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   흑백모니터: {
     code: '흑백모니터',
     name: '흑백모니터',
-    description: '총 데스 1위',
+    description: '평균 데스 1위',
     icon: '💀',
-    formatValue: cnt,
-  },
-  모범승객: {
-    code: '모범승객',
-    name: '모범승객',
-    description: '낮은 킬관여율이면서 이긴 횟수 1위',
-    icon: '🚌',
-    formatValue: games,
+    formatValue: avg1,
   },
   불사신: {
     code: '불사신',
@@ -241,9 +234,9 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   고기방패: {
     code: '고기방패',
     name: '고기방패',
-    description: '탑 평균 받은 피해 1위',
+    description: '탑 분당 받은 피해 1위',
     icon: '🛡️',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   고속도로건설자: {
     code: '고속도로건설자',
@@ -291,9 +284,9 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   대도둑: {
     code: '대도둑',
     name: '대도둑',
-    description: '정글 카정 횟수 1위',
+    description: '정글 분당 카정 1위',
     icon: '🌲',
-    formatValue: cnt,
+    formatValue: perMin,
   },
   // 미드
   MIDKING: {
@@ -313,9 +306,9 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   미드DPM: {
     code: '미드DPM',
     name: '미드DPM',
-    description: '미드 평균 딜 1위',
+    description: '미드 분당 딜 1위',
     icon: '💢',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   로밍킹: {
     code: '로밍킹',
@@ -349,16 +342,16 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   금수저: {
     code: '금수저',
     name: '금수저',
-    description: '원딜 평균 CS 1위',
+    description: '원딜 분당 CS 1위',
     icon: '🥄',
-    formatValue: avg0,
+    formatValue: perMin,
   },
   평타싸개: {
     code: '평타싸개',
     name: '평타싸개',
-    description: '원딜 딜량 1위',
+    description: '원딜 분당 딜 1위',
     icon: '🏹',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   존윅: {
     code: '존윅',
@@ -385,23 +378,23 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   와드싸개: {
     code: '와드싸개',
     name: '와드싸개',
-    description: '서폿 시야점수 1위',
+    description: '서폿 분당 시야점수 1위',
     icon: '🔭',
-    formatValue: avg1,
+    formatValue: perMin,
   },
   경호원: {
     code: '경호원',
     name: '경호원',
-    description: '팀원에게 준 실드 합산 1위',
+    description: '서폿 분당 실드 1위',
     icon: '🛡️',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
   베이비시터: {
     code: '베이비시터',
     name: '베이비시터',
-    description: '팀원에게 준 힐 합산 1위',
+    description: '서폿 분당 힐 1위',
     icon: '💊',
-    formatValue: dmg,
+    formatValue: perMinDmg,
   },
 };
 
@@ -493,6 +486,85 @@ async function aggregateByPosition(
     }));
 }
 
+type StatWithDuration = {
+  lolAccountId: bigint;
+  damageDealt: number;
+  damageTaken: number;
+  cs: number;
+  goldEarned: number;
+  visionScore: number;
+  wardsPlaced: number;
+  wardsKilled: number;
+  timeCCingOthers: number;
+  enemyJungleMinions: number;
+  shieldOnTeammates: number;
+  healsOnTeammates: number;
+  matchRecord: { gameDurationSecs: number };
+};
+
+const PER_MIN_FIELDS = {
+  damageDealt: true,
+  damageTaken: true,
+  cs: true,
+  goldEarned: true,
+  visionScore: true,
+  wardsPlaced: true,
+  wardsKilled: true,
+  timeCCingOthers: true,
+  enemyJungleMinions: true,
+  shieldOnTeammates: true,
+  healsOnTeammates: true,
+} as const;
+
+type PerMinField = keyof typeof PER_MIN_FIELDS;
+
+function buildPerMinMap(
+  stats: StatWithDuration[],
+  field: PerMinField,
+  minGames: number,
+): GroupRow[] {
+  const map = new Map<bigint, { total: number; secs: number; games: number }>();
+  for (const s of stats) {
+    const cur = map.get(s.lolAccountId) ?? { total: 0, secs: 0, games: 0 };
+    cur.total += s[field];
+    cur.secs += s.matchRecord.gameDurationSecs;
+    cur.games++;
+    map.set(s.lolAccountId, cur);
+  }
+  return [...map.entries()]
+    .filter(([, v]) => v.games >= minGames)
+    .map(([id, v]) => ({ lolAccountId: id, value: v.secs > 0 ? v.total / (v.secs / 60) : 0 }));
+}
+
+/** 분당 계산: field 합계 / 총 게임시간(분) — 계정별 */
+async function aggregatePerMin(
+  matchIds: bigint[],
+  field: PerMinField,
+  where: Record<string, unknown> = {},
+): Promise<GroupRow[]> {
+  if (matchIds.length === 0) return [];
+  const stats = await prisma.playerMatchStat.findMany({
+    where: { matchId: { in: matchIds }, ...where },
+    select: { lolAccountId: true, ...PER_MIN_FIELDS, matchRecord: { select: { gameDurationSecs: true } } },
+  });
+  return buildPerMinMap(stats, field, 3);
+}
+
+/** 포지션 필터 포함 분당 계산 */
+async function aggregatePerMinByPosition(
+  matchIds: bigint[],
+  position: string,
+  field: PerMinField,
+  minGames = 3,
+): Promise<GroupRow[]> {
+  if (matchIds.length === 0) return [];
+  const stats = await prisma.playerMatchStat.findMany({
+    where: { matchId: { in: matchIds }, position },
+    select: { lolAccountId: true, ...PER_MIN_FIELDS, matchRecord: { select: { gameDurationSecs: true } } },
+  });
+  return buildPerMinMap(stats, field, minGames);
+}
+
 /** 포지션별 승률 */
 async function winRateByPosition(matchIds: bigint[], position: string): Promise<GroupRow[]> {
   if (matchIds.length === 0) return [];
@@ -510,6 +582,63 @@ async function winRateByPosition(matchIds: bigint[], position: string): Promise<
   return [...map.entries()]
     .filter(([, v]) => v.total >= 3)
     .map(([id, v]) => ({ lolAccountId: id, value: v.wins / v.total }));
+}
+
+/** 연승/연패 최장 기록 — 전체 계정 정렬 반환 */
+async function allStreakRows(matchIds: bigint[], targetWin: boolean): Promise<GroupRow[]> {
+  if (matchIds.length === 0) return [];
+  const stats = await prisma.playerMatchStat.findMany({
+    where: { matchId: { in: matchIds } },
+    select: { lolAccountId: true, isWin: true, matchRecord: { select: { playedAt: true } } },
+    orderBy: [{ lolAccountId: 'asc' }, { matchRecord: { playedAt: 'asc' } }],
+  });
+
+  const streakMap = new Map<bigint, number>();
+  let cur: bigint | null = null;
+  let streak = 0;
+
+  for (const s of stats) {
+    if (s.lolAccountId !== cur) {
+      cur = s.lolAccountId;
+      streak = 0;
+    }
+    if (s.isWin === targetWin) {
+      streak++;
+      const prev = streakMap.get(s.lolAccountId) ?? 0;
+      if (streak > prev) streakMap.set(s.lolAccountId, streak);
+    } else {
+      streak = 0;
+    }
+  }
+
+  return [...streakMap.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .map(([id, v]) => ({ lolAccountId: id, value: v }));
+}
+
+/** 신인왕 수치 — 전체 계정 정렬 반환 */
+async function allRookieRows(matchIds: bigint[]): Promise<GroupRow[]> {
+  if (matchIds.length === 0) return [];
+  const stats = await prisma.playerMatchStat.findMany({
+    where: { matchId: { in: matchIds } },
+    select: { lolAccountId: true, isWin: true, matchRecord: { select: { playedAt: true } } },
+    orderBy: [{ lolAccountId: 'asc' }, { matchRecord: { playedAt: 'asc' } }],
+  });
+
+  const map = new Map<bigint, boolean[]>();
+  for (const s of stats) {
+    const arr = map.get(s.lolAccountId) ?? [];
+    arr.push(s.isWin);
+    map.set(s.lolAccountId, arr);
+  }
+
+  const rows: GroupRow[] = [];
+  for (const [id, results] of map) {
+    if (results.length < 5) continue;
+    const first10 = results.slice(0, 10);
+    rows.push({ lolAccountId: id, value: first10.filter(Boolean).length / first10.length });
+  }
+  return rows.sort((a, b) => b.value - a.value);
 }
 
 /** 연승/연패 최장 기록 — 동점자 전원 반환 */
@@ -613,13 +742,6 @@ async function rookieKings(matchIds: bigint[]): Promise<TitleHolder[]> {
   return topAllBy(rows, 'desc');
 }
 
-// ─── 모범승객: KP < 30% 이면서 이긴 횟수 1위 ────────────────────────────────
-
-async function goodPassengers(matchIds: bigint[]): Promise<TitleHolder[]> {
-  const rows = await countCondition(matchIds, { isWin: true, killParticipation: { lt: 0.3 } });
-  return topAllBy(rows, 'desc');
-}
-
 // ─── 불사신: deaths=0 이면서 이긴 횟수 1위 ─────────────────────────────────
 
 async function immortals(matchIds: bigint[]): Promise<TitleHolder[]> {
@@ -671,6 +793,12 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     order: 'desc' | 'asc' = 'desc',
   ): Promise<TR> => pos(position, field, agg).then((r) => [code, topAllBy(r, order)]);
 
+  const pm = (code: string, field: PerMinField): Promise<TR> =>
+    aggregatePerMin(matchIds, field).then((r) => [code, topAllBy(r, 'desc')]);
+
+  const pmp = (code: string, position: string, field: PerMinField): Promise<TR> =>
+    aggregatePerMinByPosition(matchIds, position, field).then((r) => [code, topAllBy(r, 'desc')]);
+
   const titleResults: TR[] = await Promise.all([
     // 전투
     safe('학살자', t('학살자', all('kills', 'avg'), 'desc')),
@@ -680,24 +808,24 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     safe('펜타킬러', t('펜타킬러', all('pentaKills', 'sum'), 'desc')),
     safe('쿼드라킬러', t('쿼드라킬러', all('quadraKills', 'sum'), 'desc')),
     // 딜/탱
-    safe('DPM머신', t('DPM머신', all('damageDealt', 'avg'), 'desc')),
-    safe('샌드백', t('샌드백', all('damageTaken', 'avg'), 'desc')),
+    safe('DPM머신', pm('DPM머신', 'damageDealt')),
+    safe('샌드백', pm('샌드백', 'damageTaken')),
     safe('철거왕', t('철거왕', all('turretKills', 'avg'), 'desc')),
     // 오브젝트
     safe('용사냥꾼', t('용사냥꾼', all('dragonKills', 'sum'), 'desc')),
     safe('바론사냥꾼', t('바론사냥꾼', all('baronKills', 'sum'), 'desc')),
     // CS/골드
-    safe('CS왕', t('CS왕', all('cs', 'avg'), 'desc')),
-    safe('골드킹', t('골드킹', all('goldEarned', 'avg'), 'desc')),
+    safe('CS왕', pm('CS왕', 'cs')),
+    safe('골드킹', pm('골드킹', 'goldEarned')),
     // 시야
-    safe('만물의눈', t('만물의눈', all('visionScore', 'avg'), 'desc')),
-    safe('와드장인', t('와드장인', all('wardsPlaced', 'avg'), 'desc')),
-    safe('청소부', t('청소부', all('wardsKilled', 'avg'), 'desc')),
-    safe('타임스토프', t('타임스토프', all('timeCCingOthers', 'avg'), 'desc')),
+    safe('만물의눈', pm('만물의눈', 'visionScore')),
+    safe('와드장인', pm('와드장인', 'wardsPlaced')),
+    safe('청소부', pm('청소부', 'wardsKilled')),
+    safe('타임스토프', pm('타임스토프', 'timeCCingOthers')),
     // 기타
     safe('투명인간', t('투명인간', all('killParticipation', 'avg'), 'asc')),
     safe('솔로킹', t('솔로킹', all('soloKills', 'sum'), 'desc')),
-    safe('흑백모니터', t('흑백모니터', all('deaths', 'sum'), 'desc')),
+    safe('흑백모니터', t('흑백모니터', all('deaths', 'avg'), 'desc')),
     Promise.resolve(['개근상', []] as TR),
     safe(
       '연승왕',
@@ -706,10 +834,6 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     safe(
       '연패왕',
       maxStreakAccounts(matchIds, false).then((r) => ['연패왕', r]),
-    ),
-    safe(
-      '모범승객',
-      goodPassengers(matchIds).then((r) => ['모범승객', r]),
     ),
     safe(
       '불사신',
@@ -741,7 +865,7 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       posWr('TOP').then((r) => ['TOPKING', topAllBy(r, 'desc')]),
     ),
     safe('전사왕', tp('전사왕', 'TOP', 'killParticipation', 'avg')),
-    safe('고기방패', tp('고기방패', 'TOP', 'damageTaken', 'avg')),
+    safe('고기방패', pmp('고기방패', 'TOP', 'damageTaken')),
     safe('고속도로건설자', tp('고속도로건설자', 'TOP', 'turretKills', 'avg')),
     safe('라인전의악마', tp('라인전의악마', 'TOP', 'soloKills', 'sum')),
     // 정글
@@ -751,7 +875,7 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     ),
     safe('포식자', tp('포식자', 'JUNGLE', 'killParticipation', 'avg')),
     safe('작전명왕호야', tp('작전명왕호야', 'JUNGLE', 'objectivesStolen', 'sum')),
-    safe('대도둑', tp('대도둑', 'JUNGLE', 'enemyJungleMinions', 'sum')),
+    safe('대도둑', pmp('대도둑', 'JUNGLE', 'enemyJungleMinions')),
     safe(
       '오브젝트마스터',
       (async () => {
@@ -772,7 +896,7 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       posWr('MIDDLE').then((r) => ['MIDKING', topAllBy(r, 'desc')]),
     ),
     safe('황족', tp('황족', 'MIDDLE', 'killParticipation', 'avg')),
-    safe('미드DPM', tp('미드DPM', 'MIDDLE', 'damageDealt', 'avg')),
+    safe('미드DPM', pmp('미드DPM', 'MIDDLE', 'damageDealt')),
     safe('로밍킹', tp('로밍킹', 'MIDDLE', 'assists', 'avg')),
     safe('미드솔로킬러', tp('미드솔로킬러', 'MIDDLE', 'soloKills', 'sum')),
     // 원딜
@@ -781,8 +905,8 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       posWr('BOTTOM').then((r) => ['ADKING', topAllBy(r, 'desc')]),
     ),
     safe('해결사', tp('해결사', 'BOTTOM', 'killParticipation', 'avg')),
-    safe('금수저', tp('금수저', 'BOTTOM', 'cs', 'avg')),
-    safe('평타싸개', tp('평타싸개', 'BOTTOM', 'damageDealt', 'avg')),
+    safe('금수저', pmp('금수저', 'BOTTOM', 'cs')),
+    safe('평타싸개', pmp('평타싸개', 'BOTTOM', 'damageDealt')),
     safe('존윅', tp('존윅', 'BOTTOM', 'deaths', 'avg', 'asc')),
     // 서폿
     safe(
@@ -790,9 +914,9 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       posWr('UTILITY').then((r) => ['SUPKING', topAllBy(r, 'desc')]),
     ),
     safe('그림자', tp('그림자', 'UTILITY', 'killParticipation', 'avg')),
-    safe('와드싸개', tp('와드싸개', 'UTILITY', 'visionScore', 'avg')),
-    safe('경호원', tp('경호원', 'UTILITY', 'shieldOnTeammates', 'sum')),
-    safe('베이비시터', tp('베이비시터', 'UTILITY', 'healsOnTeammates', 'sum')),
+    safe('와드싸개', pmp('와드싸개', 'UTILITY', 'visionScore')),
+    safe('경호원', pmp('경호원', 'UTILITY', 'shieldOnTeammates')),
+    safe('베이비시터', pmp('베이비시터', 'UTILITY', 'healsOnTeammates')),
   ]);
 
   // 개근상: 게임 수가 가장 많은 계정 (동점 포함)
@@ -814,6 +938,136 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     await setTitleHolders(guildServerId, code, accountIds);
   }
   await setTitleHolders(guildServerId, '개근상', mostGamesIds);
+}
+
+export interface TitleRankRow {
+  lolAccountId: bigint;
+  value: number;
+}
+
+/**
+ * 특정 칭호의 서버 내 전체 순위 반환
+ * recalculateTitles와 동일한 계산 로직을 사용하되, 1위 자르지 않고 전체 정렬
+ */
+export async function getTitleRanking(
+  guildServerId: bigint,
+  titleCode: string,
+): Promise<TitleRankRow[]> {
+  const matchIds = await getServerMatchIds(guildServerId);
+  if (matchIds.length === 0) return [];
+
+  const all = (field: string, agg: 'avg' | 'sum', where: Record<string, unknown> = {}) =>
+    aggregateByAccount(matchIds, field, agg, where);
+  const pos = (position: string, field: string, agg: 'avg' | 'sum') =>
+    aggregateByPosition(matchIds, position, field, agg);
+  const pm = (field: PerMinField) => aggregatePerMin(matchIds, field);
+  const pmp = (position: string, field: PerMinField) =>
+    aggregatePerMinByPosition(matchIds, position, field);
+
+  async function sorted(rows: Promise<GroupRow[]>, order: 'desc' | 'asc'): Promise<TitleRankRow[]> {
+    const r = await rows;
+    return [...r].sort((a, b) => order === 'desc' ? b.value - a.value : a.value - b.value);
+  }
+
+  const longIds = (
+    await prisma.matchRecord.findMany({
+      where: { id: { in: matchIds }, gameDurationSecs: { gte: 40 * 60 } },
+      select: { id: true },
+    })
+  ).map((r) => r.id);
+
+  const shortIds = (
+    await prisma.matchRecord.findMany({
+      where: { id: { in: matchIds }, gameDurationSecs: { lte: 25 * 60 } },
+      select: { id: true },
+    })
+  ).map((r) => r.id);
+
+  switch (titleCode) {
+    // 전투
+    case '학살자': return sorted(all('kills', 'avg'), 'desc');
+    case '생존왕': return sorted(all('deaths', 'avg'), 'asc');
+    case '킹메이커': return sorted(all('assists', 'avg'), 'desc');
+    case '퍼블전문가': return sorted(countCondition(matchIds, { firstBloodKill: true }), 'desc');
+    case '펜타킬러': return sorted(all('pentaKills', 'sum'), 'desc');
+    case '쿼드라킬러': return sorted(all('quadraKills', 'sum'), 'desc');
+    // 딜/탱
+    case 'DPM머신': return sorted(pm('damageDealt'), 'desc');
+    case '샌드백': return sorted(pm('damageTaken'), 'desc');
+    case '철거왕': return sorted(all('turretKills', 'avg'), 'desc');
+    // 오브젝트
+    case '용사냥꾼': return sorted(all('dragonKills', 'sum'), 'desc');
+    case '바론사냥꾼': return sorted(all('baronKills', 'sum'), 'desc');
+    // CS/골드
+    case 'CS왕': return sorted(pm('cs'), 'desc');
+    case '골드킹': return sorted(pm('goldEarned'), 'desc');
+    // 시야
+    case '만물의눈': return sorted(pm('visionScore'), 'desc');
+    case '와드장인': return sorted(pm('wardsPlaced'), 'desc');
+    case '청소부': return sorted(pm('wardsKilled'), 'desc');
+    case '타임스토프': return sorted(pm('timeCCingOthers'), 'desc');
+    // 기타
+    case '투명인간': return sorted(all('killParticipation', 'avg'), 'asc');
+    case '솔로킹': return sorted(all('soloKills', 'sum'), 'desc');
+    case '흑백모니터': return sorted(all('deaths', 'avg'), 'desc');
+    case '불사신': return sorted(countCondition(matchIds, { isWin: true, deaths: 0 }), 'desc');
+    case '개근상': {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = (await (prisma as any).playerMatchStat.groupBy({
+        by: ['lolAccountId'],
+        where: { matchId: { in: matchIds } },
+        _count: { id: true },
+      })) as PrismaGroupRow[];
+      return rows
+        .map((r) => ({ lolAccountId: r.lolAccountId, value: r._count.id }))
+        .sort((a, b) => b.value - a.value);
+    }
+    case '연승왕': return allStreakRows(matchIds, true);
+    case '연패왕': return allStreakRows(matchIds, false);
+    case '신인왕': return allRookieRows(matchIds);
+    case '끈기왕': return sorted(longIds.length > 0 ? countCondition(longIds, { isWin: true }) : Promise.resolve([]), 'desc');
+    case '속전속결': return sorted(shortIds.length > 0 ? countCondition(shortIds, { isWin: true }) : Promise.resolve([]), 'desc');
+    // 탑
+    case 'TOPKING': return sorted(winRateByPosition(matchIds, 'TOP'), 'desc');
+    case '전사왕': return sorted(pos('TOP', 'killParticipation', 'avg'), 'desc');
+    case '고기방패': return sorted(pmp('TOP', 'damageTaken'), 'desc');
+    case '고속도로건설자': return sorted(pos('TOP', 'turretKills', 'avg'), 'desc');
+    case '라인전의악마': return sorted(pos('TOP', 'soloKills', 'sum'), 'desc');
+    // 정글
+    case 'JUGKING': return sorted(winRateByPosition(matchIds, 'JUNGLE'), 'desc');
+    case '포식자': return sorted(pos('JUNGLE', 'killParticipation', 'avg'), 'desc');
+    case '오브젝트마스터': {
+      const dragonRows = await pos('JUNGLE', 'dragonKills', 'sum');
+      const baronRows = await pos('JUNGLE', 'baronKills', 'sum');
+      const combined = new Map<bigint, number>();
+      for (const r of dragonRows) combined.set(r.lolAccountId, (combined.get(r.lolAccountId) ?? 0) + r.value);
+      for (const r of baronRows) combined.set(r.lolAccountId, (combined.get(r.lolAccountId) ?? 0) + r.value);
+      return [...combined.entries()]
+        .map(([id, v]) => ({ lolAccountId: id, value: v }))
+        .sort((a, b) => b.value - a.value);
+    }
+    case '작전명왕호야': return sorted(pos('JUNGLE', 'objectivesStolen', 'sum'), 'desc');
+    case '대도둑': return sorted(pmp('JUNGLE', 'enemyJungleMinions'), 'desc');
+    // 미드
+    case 'MIDKING': return sorted(winRateByPosition(matchIds, 'MIDDLE'), 'desc');
+    case '황족': return sorted(pos('MIDDLE', 'killParticipation', 'avg'), 'desc');
+    case '미드DPM': return sorted(pmp('MIDDLE', 'damageDealt'), 'desc');
+    case '로밍킹': return sorted(pos('MIDDLE', 'assists', 'avg'), 'desc');
+    case '미드솔로킬러': return sorted(pos('MIDDLE', 'soloKills', 'sum'), 'desc');
+    // 원딜
+    case 'ADKING': return sorted(winRateByPosition(matchIds, 'BOTTOM'), 'desc');
+    case '해결사': return sorted(pos('BOTTOM', 'killParticipation', 'avg'), 'desc');
+    case '금수저': return sorted(pmp('BOTTOM', 'cs'), 'desc');
+    case '평타싸개': return sorted(pmp('BOTTOM', 'damageDealt'), 'desc');
+    case '존윅': return sorted(pos('BOTTOM', 'deaths', 'avg'), 'asc');
+    // 서폿
+    case 'SUPKING': return sorted(winRateByPosition(matchIds, 'UTILITY'), 'desc');
+    case '그림자': return sorted(pos('UTILITY', 'killParticipation', 'avg'), 'desc');
+    case '와드싸개': return sorted(pmp('UTILITY', 'visionScore'), 'desc');
+    case '경호원': return sorted(pmp('UTILITY', 'shieldOnTeammates'), 'desc');
+    case '베이비시터': return sorted(pmp('UTILITY', 'healsOnTeammates'), 'desc');
+    default: return [];
+  }
 }
 
 /** 서버에서 특정 lolAccount가 보유한 칭호 목록 조회 */
