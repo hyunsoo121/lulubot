@@ -81,6 +81,10 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
   // 커스텀 게임만 처리
   if (info.gameType !== 'CUSTOM_GAME') return false;
 
+  // 리메이크/중도포기 경기 제외 (5분 미만 또는 승리팀 없음)
+  if (info.gameDuration < 300) return false;
+  if (!info.teams.some((t) => t.win)) return false;
+
   const winnerTeamId = info.teams.find((t) => t.win)?.teamId ?? 100;
   const winnerTeam = winnerTeamId === 100 ? 'BLUE' : 'RED';
 

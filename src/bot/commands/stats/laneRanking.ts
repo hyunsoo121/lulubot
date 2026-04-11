@@ -287,13 +287,23 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   collector.on('collect', async (btn) => {
     try {
       if (btn.user.id !== interaction.user.id) {
-        await btn.reply({ content: '본인이 실행한 명령어에만 사용할 수 있습니다.', ephemeral: true });
+        await btn.reply({
+          content: '본인이 실행한 명령어에만 사용할 수 있습니다.',
+          ephemeral: true,
+        });
         return;
       }
       if (btn.customId === 'lane_prev') page--;
       if (btn.customId === 'lane_next') page++;
       await btn.update({
-        embeds: [buildEmbed(allRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), position, page, totalPages)],
+        embeds: [
+          buildEmbed(
+            allRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+            position,
+            page,
+            totalPages,
+          ),
+        ],
         components: [buildButtons(page, totalPages)],
       });
     } catch (e) {
