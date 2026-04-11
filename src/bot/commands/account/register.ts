@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder, User } from 'discord.js';
 import { registerAccount } from '../../../services/account';
 import { scanMatchesByUser } from '../../../services/matchScan';
+import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('계정등록')
@@ -45,6 +46,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     // 백그라운드 스캔 — 완료 시 채널 ephemeral 메시지 발송
     scanMatchesByUser(discordUserId, guildServerId)
       .then(async (result) => {
+        if (guildServerId) {
+          await recalculateTitles(guildServerId).catch((e) =>
+            console.error('[register] 칭호 재계산 실패:', e),
+          );
+        }
         await interaction.followUp({
           content: [
             `✅ **${account.gameName}#${account.tagLine}** 전적 갱신 완료!`,
