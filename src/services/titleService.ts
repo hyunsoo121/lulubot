@@ -24,7 +24,9 @@ const games = (v: number) => `${Math.round(v)}판`;
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 const streak = (v: number) => `${Math.round(v)}연속`;
 const perMin = (v: number) => `${v.toFixed(1)}/분`;
+const perMin3 = (v: number) => `${v.toFixed(3)}/분`;
 const perMinDmg = (v: number) => `${Math.round(v).toLocaleString()}/분`;
+const share = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
   // 전투
@@ -129,14 +131,14 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
     name: '와드장인',
     description: '분당 와드 설치 1위',
     icon: '🔦',
-    formatValue: perMin,
+    formatValue: perMin3,
   },
   청소부: {
     code: '청소부',
     name: '청소부',
     description: '분당 와드 제거 1위',
     icon: '🧹',
-    formatValue: perMin,
+    formatValue: perMin3,
   },
   타임스토프: {
     code: '타임스토프',
@@ -380,7 +382,7 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
     name: '와드싸개',
     description: '서폿 분당 시야점수 1위',
     icon: '🔭',
-    formatValue: perMin,
+    formatValue: perMin3,
   },
   경호원: {
     code: '경호원',
@@ -395,6 +397,36 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
     description: '서폿 분당 힐 1위',
     icon: '💊',
     formatValue: perMinDmg,
+  },
+  // 핑와
+  핑와장인: {
+    code: '핑와장인',
+    name: '핑와장인',
+    description: '분당 제어 와드 설치 1위',
+    icon: '📡',
+    formatValue: perMin3,
+  },
+  // 딜/골드 비율
+  딜폭군: {
+    code: '딜폭군',
+    name: '딜폭군',
+    description: '팀 내 딜 비율(DMG%) 1위',
+    icon: '💣',
+    formatValue: share,
+  },
+  금고: {
+    code: '금고',
+    name: '금고',
+    description: '팀 내 골드 비율(Gold%) 1위',
+    icon: '🏦',
+    formatValue: share,
+  },
+  골드효율: {
+    code: '골드효율',
+    name: '골드효율',
+    description: '골드당 딜 비율 1위',
+    icon: '⚗️',
+    formatValue: (v: number) => `${v.toFixed(2)}딜/골드`,
   },
 };
 
@@ -495,6 +527,7 @@ type StatWithDuration = {
   visionScore: number;
   wardsPlaced: number;
   wardsKilled: number;
+  controlWardsPlaced: number;
   timeCCingOthers: number;
   enemyJungleMinions: number;
   shieldOnTeammates: number;
@@ -510,6 +543,7 @@ const PER_MIN_FIELDS = {
   visionScore: true,
   wardsPlaced: true,
   wardsKilled: true,
+  controlWardsPlaced: true,
   timeCCingOthers: true,
   enemyJungleMinions: true,
   shieldOnTeammates: true,
@@ -545,7 +579,11 @@ async function aggregatePerMin(
   if (matchIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
     where: { matchId: { in: matchIds }, ...where },
-    select: { lolAccountId: true, ...PER_MIN_FIELDS, matchRecord: { select: { gameDurationSecs: true } } },
+    select: {
+      lolAccountId: true,
+      ...PER_MIN_FIELDS,
+      matchRecord: { select: { gameDurationSecs: true } },
+    },
   });
   return buildPerMinMap(stats, field, 3);
 }
@@ -560,7 +598,11 @@ async function aggregatePerMinByPosition(
   if (matchIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
     where: { matchId: { in: matchIds }, position },
-    select: { lolAccountId: true, ...PER_MIN_FIELDS, matchRecord: { select: { gameDurationSecs: true } } },
+    select: {
+      lolAccountId: true,
+      ...PER_MIN_FIELDS,
+      matchRecord: { select: { gameDurationSecs: true } },
+    },
   });
   return buildPerMinMap(stats, field, minGames);
 }
@@ -917,6 +959,11 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     safe('와드싸개', pmp('와드싸개', 'UTILITY', 'visionScore')),
     safe('경호원', pmp('경호원', 'UTILITY', 'shieldOnTeammates')),
     safe('베이비시터', pmp('베이비시터', 'UTILITY', 'healsOnTeammates')),
+    // 핑와/비율
+    safe('핑와장인', pm('핑와장인', 'controlWardsPlaced')),
+    safe('딜폭군', t('딜폭군', all('dmgShare', 'avg'), 'desc')),
+    safe('금고', t('금고', all('goldShare', 'avg'), 'desc')),
+    safe('골드효율', t('골드효율', all('dmgPerGold', 'avg'), 'desc')),
   ]);
 
   // 개근상: 게임 수가 가장 많은 계정 (동점 포함)
@@ -966,7 +1013,7 @@ export async function getTitleRanking(
 
   async function sorted(rows: Promise<GroupRow[]>, order: 'desc' | 'asc'): Promise<TitleRankRow[]> {
     const r = await rows;
-    return [...r].sort((a, b) => order === 'desc' ? b.value - a.value : a.value - b.value);
+    return [...r].sort((a, b) => (order === 'desc' ? b.value - a.value : a.value - b.value));
   }
 
   const longIds = (
@@ -985,32 +1032,53 @@ export async function getTitleRanking(
 
   switch (titleCode) {
     // 전투
-    case '학살자': return sorted(all('kills', 'avg'), 'desc');
-    case '생존왕': return sorted(all('deaths', 'avg'), 'asc');
-    case '킹메이커': return sorted(all('assists', 'avg'), 'desc');
-    case '퍼블전문가': return sorted(countCondition(matchIds, { firstBloodKill: true }), 'desc');
-    case '펜타킬러': return sorted(all('pentaKills', 'sum'), 'desc');
-    case '쿼드라킬러': return sorted(all('quadraKills', 'sum'), 'desc');
+    case '학살자':
+      return sorted(all('kills', 'avg'), 'desc');
+    case '생존왕':
+      return sorted(all('deaths', 'avg'), 'asc');
+    case '킹메이커':
+      return sorted(all('assists', 'avg'), 'desc');
+    case '퍼블전문가':
+      return sorted(countCondition(matchIds, { firstBloodKill: true }), 'desc');
+    case '펜타킬러':
+      return sorted(all('pentaKills', 'sum'), 'desc');
+    case '쿼드라킬러':
+      return sorted(all('quadraKills', 'sum'), 'desc');
     // 딜/탱
-    case 'DPM머신': return sorted(pm('damageDealt'), 'desc');
-    case '샌드백': return sorted(pm('damageTaken'), 'desc');
-    case '철거왕': return sorted(all('turretKills', 'avg'), 'desc');
+    case 'DPM머신':
+      return sorted(pm('damageDealt'), 'desc');
+    case '샌드백':
+      return sorted(pm('damageTaken'), 'desc');
+    case '철거왕':
+      return sorted(all('turretKills', 'avg'), 'desc');
     // 오브젝트
-    case '용사냥꾼': return sorted(all('dragonKills', 'sum'), 'desc');
-    case '바론사냥꾼': return sorted(all('baronKills', 'sum'), 'desc');
+    case '용사냥꾼':
+      return sorted(all('dragonKills', 'sum'), 'desc');
+    case '바론사냥꾼':
+      return sorted(all('baronKills', 'sum'), 'desc');
     // CS/골드
-    case 'CS왕': return sorted(pm('cs'), 'desc');
-    case '골드킹': return sorted(pm('goldEarned'), 'desc');
+    case 'CS왕':
+      return sorted(pm('cs'), 'desc');
+    case '골드킹':
+      return sorted(pm('goldEarned'), 'desc');
     // 시야
-    case '만물의눈': return sorted(pm('visionScore'), 'desc');
-    case '와드장인': return sorted(pm('wardsPlaced'), 'desc');
-    case '청소부': return sorted(pm('wardsKilled'), 'desc');
-    case '타임스토프': return sorted(pm('timeCCingOthers'), 'desc');
+    case '만물의눈':
+      return sorted(pm('visionScore'), 'desc');
+    case '와드장인':
+      return sorted(pm('wardsPlaced'), 'desc');
+    case '청소부':
+      return sorted(pm('wardsKilled'), 'desc');
+    case '타임스토프':
+      return sorted(pm('timeCCingOthers'), 'desc');
     // 기타
-    case '투명인간': return sorted(all('killParticipation', 'avg'), 'asc');
-    case '솔로킹': return sorted(all('soloKills', 'sum'), 'desc');
-    case '흑백모니터': return sorted(all('deaths', 'avg'), 'desc');
-    case '불사신': return sorted(countCondition(matchIds, { isWin: true, deaths: 0 }), 'desc');
+    case '투명인간':
+      return sorted(all('killParticipation', 'avg'), 'asc');
+    case '솔로킹':
+      return sorted(all('soloKills', 'sum'), 'desc');
+    case '흑백모니터':
+      return sorted(all('deaths', 'avg'), 'desc');
+    case '불사신':
+      return sorted(countCondition(matchIds, { isWin: true, deaths: 0 }), 'desc');
     case '개근상': {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = (await (prisma as any).playerMatchStat.groupBy({
@@ -1022,51 +1090,97 @@ export async function getTitleRanking(
         .map((r) => ({ lolAccountId: r.lolAccountId, value: r._count.id }))
         .sort((a, b) => b.value - a.value);
     }
-    case '연승왕': return allStreakRows(matchIds, true);
-    case '연패왕': return allStreakRows(matchIds, false);
-    case '신인왕': return allRookieRows(matchIds);
-    case '끈기왕': return sorted(longIds.length > 0 ? countCondition(longIds, { isWin: true }) : Promise.resolve([]), 'desc');
-    case '속전속결': return sorted(shortIds.length > 0 ? countCondition(shortIds, { isWin: true }) : Promise.resolve([]), 'desc');
+    case '연승왕':
+      return allStreakRows(matchIds, true);
+    case '연패왕':
+      return allStreakRows(matchIds, false);
+    case '신인왕':
+      return allRookieRows(matchIds);
+    case '끈기왕':
+      return sorted(
+        longIds.length > 0 ? countCondition(longIds, { isWin: true }) : Promise.resolve([]),
+        'desc',
+      );
+    case '속전속결':
+      return sorted(
+        shortIds.length > 0 ? countCondition(shortIds, { isWin: true }) : Promise.resolve([]),
+        'desc',
+      );
     // 탑
-    case 'TOPKING': return sorted(winRateByPosition(matchIds, 'TOP'), 'desc');
-    case '전사왕': return sorted(pos('TOP', 'killParticipation', 'avg'), 'desc');
-    case '고기방패': return sorted(pmp('TOP', 'damageTaken'), 'desc');
-    case '고속도로건설자': return sorted(pos('TOP', 'turretKills', 'avg'), 'desc');
-    case '라인전의악마': return sorted(pos('TOP', 'soloKills', 'sum'), 'desc');
+    case 'TOPKING':
+      return sorted(winRateByPosition(matchIds, 'TOP'), 'desc');
+    case '전사왕':
+      return sorted(pos('TOP', 'killParticipation', 'avg'), 'desc');
+    case '고기방패':
+      return sorted(pmp('TOP', 'damageTaken'), 'desc');
+    case '고속도로건설자':
+      return sorted(pos('TOP', 'turretKills', 'avg'), 'desc');
+    case '라인전의악마':
+      return sorted(pos('TOP', 'soloKills', 'sum'), 'desc');
     // 정글
-    case 'JUGKING': return sorted(winRateByPosition(matchIds, 'JUNGLE'), 'desc');
-    case '포식자': return sorted(pos('JUNGLE', 'killParticipation', 'avg'), 'desc');
+    case 'JUGKING':
+      return sorted(winRateByPosition(matchIds, 'JUNGLE'), 'desc');
+    case '포식자':
+      return sorted(pos('JUNGLE', 'killParticipation', 'avg'), 'desc');
     case '오브젝트마스터': {
       const dragonRows = await pos('JUNGLE', 'dragonKills', 'sum');
       const baronRows = await pos('JUNGLE', 'baronKills', 'sum');
       const combined = new Map<bigint, number>();
-      for (const r of dragonRows) combined.set(r.lolAccountId, (combined.get(r.lolAccountId) ?? 0) + r.value);
-      for (const r of baronRows) combined.set(r.lolAccountId, (combined.get(r.lolAccountId) ?? 0) + r.value);
+      for (const r of dragonRows)
+        combined.set(r.lolAccountId, (combined.get(r.lolAccountId) ?? 0) + r.value);
+      for (const r of baronRows)
+        combined.set(r.lolAccountId, (combined.get(r.lolAccountId) ?? 0) + r.value);
       return [...combined.entries()]
         .map(([id, v]) => ({ lolAccountId: id, value: v }))
         .sort((a, b) => b.value - a.value);
     }
-    case '작전명왕호야': return sorted(pos('JUNGLE', 'objectivesStolen', 'sum'), 'desc');
-    case '대도둑': return sorted(pmp('JUNGLE', 'enemyJungleMinions'), 'desc');
+    case '작전명왕호야':
+      return sorted(pos('JUNGLE', 'objectivesStolen', 'sum'), 'desc');
+    case '대도둑':
+      return sorted(pmp('JUNGLE', 'enemyJungleMinions'), 'desc');
     // 미드
-    case 'MIDKING': return sorted(winRateByPosition(matchIds, 'MIDDLE'), 'desc');
-    case '황족': return sorted(pos('MIDDLE', 'killParticipation', 'avg'), 'desc');
-    case '미드DPM': return sorted(pmp('MIDDLE', 'damageDealt'), 'desc');
-    case '로밍킹': return sorted(pos('MIDDLE', 'assists', 'avg'), 'desc');
-    case '미드솔로킬러': return sorted(pos('MIDDLE', 'soloKills', 'sum'), 'desc');
+    case 'MIDKING':
+      return sorted(winRateByPosition(matchIds, 'MIDDLE'), 'desc');
+    case '황족':
+      return sorted(pos('MIDDLE', 'killParticipation', 'avg'), 'desc');
+    case '미드DPM':
+      return sorted(pmp('MIDDLE', 'damageDealt'), 'desc');
+    case '로밍킹':
+      return sorted(pos('MIDDLE', 'assists', 'avg'), 'desc');
+    case '미드솔로킬러':
+      return sorted(pos('MIDDLE', 'soloKills', 'sum'), 'desc');
     // 원딜
-    case 'ADKING': return sorted(winRateByPosition(matchIds, 'BOTTOM'), 'desc');
-    case '해결사': return sorted(pos('BOTTOM', 'killParticipation', 'avg'), 'desc');
-    case '금수저': return sorted(pmp('BOTTOM', 'cs'), 'desc');
-    case '평타싸개': return sorted(pmp('BOTTOM', 'damageDealt'), 'desc');
-    case '존윅': return sorted(pos('BOTTOM', 'deaths', 'avg'), 'asc');
+    case 'ADKING':
+      return sorted(winRateByPosition(matchIds, 'BOTTOM'), 'desc');
+    case '해결사':
+      return sorted(pos('BOTTOM', 'killParticipation', 'avg'), 'desc');
+    case '금수저':
+      return sorted(pmp('BOTTOM', 'cs'), 'desc');
+    case '평타싸개':
+      return sorted(pmp('BOTTOM', 'damageDealt'), 'desc');
+    case '존윅':
+      return sorted(pos('BOTTOM', 'deaths', 'avg'), 'asc');
     // 서폿
-    case 'SUPKING': return sorted(winRateByPosition(matchIds, 'UTILITY'), 'desc');
-    case '그림자': return sorted(pos('UTILITY', 'killParticipation', 'avg'), 'desc');
-    case '와드싸개': return sorted(pmp('UTILITY', 'visionScore'), 'desc');
-    case '경호원': return sorted(pmp('UTILITY', 'shieldOnTeammates'), 'desc');
-    case '베이비시터': return sorted(pmp('UTILITY', 'healsOnTeammates'), 'desc');
-    default: return [];
+    case 'SUPKING':
+      return sorted(winRateByPosition(matchIds, 'UTILITY'), 'desc');
+    case '그림자':
+      return sorted(pos('UTILITY', 'killParticipation', 'avg'), 'desc');
+    case '와드싸개':
+      return sorted(pmp('UTILITY', 'visionScore'), 'desc');
+    case '경호원':
+      return sorted(pmp('UTILITY', 'shieldOnTeammates'), 'desc');
+    case '베이비시터':
+      return sorted(pmp('UTILITY', 'healsOnTeammates'), 'desc');
+    case '핑와장인':
+      return sorted(pm('controlWardsPlaced'), 'desc');
+    case '딜폭군':
+      return sorted(all('dmgShare', 'avg'), 'desc');
+    case '금고':
+      return sorted(all('goldShare', 'avg'), 'desc');
+    case '골드효율':
+      return sorted(all('dmgPerGold', 'avg'), 'desc');
+    default:
+      return [];
   }
 }
 

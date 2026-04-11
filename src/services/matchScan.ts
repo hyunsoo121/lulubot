@@ -115,8 +115,12 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
 
   // 팀별 총 킬 계산 (killParticipation 산출용)
   const teamKills = new Map<number, number>();
+  const teamDmg = new Map<number, number>();
+  const teamGold = new Map<number, number>();
   for (const p of info.participants) {
     teamKills.set(p.teamId, (teamKills.get(p.teamId) ?? 0) + p.kills);
+    teamDmg.set(p.teamId, (teamDmg.get(p.teamId) ?? 0) + p.totalDamageDealtToChampions);
+    teamGold.set(p.teamId, (teamGold.get(p.teamId) ?? 0) + p.goldEarned);
   }
 
   // 아직 저장 안 된 유저만 삽입
@@ -125,7 +129,12 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
     .map((p) => {
       const account = accountMap.get(p.puuid)!;
       const tk = teamKills.get(p.teamId) ?? 0;
+      const td = teamDmg.get(p.teamId) ?? 0;
+      const tg = teamGold.get(p.teamId) ?? 0;
       const kp = tk > 0 ? (p.kills + p.assists) / tk : 0;
+      const dmgShare = td > 0 ? p.totalDamageDealtToChampions / td : 0;
+      const goldShare = tg > 0 ? p.goldEarned / tg : 0;
+      const dmgPerGold = p.goldEarned > 0 ? p.totalDamageDealtToChampions / p.goldEarned : 0;
       return {
         matchId: match.id,
         lolAccountId: account.id,
@@ -150,12 +159,16 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         baronKills: p.baronKills ?? 0,
         wardsPlaced: p.wardsPlaced ?? 0,
         wardsKilled: p.wardsKilled ?? 0,
+        controlWardsPlaced: p.visionWardsBoughtInGame ?? 0,
         timeCCingOthers: p.timeCCingOthers ?? 0,
         enemyJungleMinions: p.totalEnemyJungleMinionsKilled ?? 0,
         objectivesStolen: p.objectivesStolen ?? 0,
         healsOnTeammates: p.totalHealsOnTeammates ?? 0,
         shieldOnTeammates: p.totalDamageShieldedOnTeammates ?? 0,
         soloKills: p.challenges?.soloKills ?? 0,
+        dmgShare,
+        goldShare,
+        dmgPerGold,
       };
     });
 

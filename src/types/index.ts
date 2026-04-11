@@ -37,6 +37,7 @@ export interface RiotMatchParticipant {
   objectivesStolen: number;
   totalHealsOnTeammates: number;
   totalDamageShieldedOnTeammates: number;
+  visionWardsBoughtInGame: number;
   challenges?: {
     soloKills?: number;
   };
