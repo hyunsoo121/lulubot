@@ -208,6 +208,45 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
     });
   }
 
+  // DuoStat 업데이트 (새로 삽입된 유저만, guildServerId 있을 때만)
+  if (guildServerId) {
+    const newAccounts = [...newAccountIds]
+      .map((id) => accounts.find((a) => a.id === id))
+      .filter(Boolean) as typeof accounts;
+
+    for (let i = 0; i < newAccounts.length; i++) {
+      for (let j = i + 1; j < newAccounts.length; j++) {
+        const a1 = newAccounts[i];
+        const a2 = newAccounts[j];
+        const p1 = info.participants.find((p) => p.puuid === a1.puuid);
+        const p2 = info.participants.find((p) => p.puuid === a2.puuid);
+        if (!p1 || !p2) continue;
+
+        const [id1, id2] = a1.id < a2.id ? [a1.id, a2.id] : [a2.id, a1.id];
+        const sameTeam = p1.teamId === p2.teamId;
+
+        await prisma.duoStat.upsert({
+          where: { guildServerId_lolAccountId1_lolAccountId2: { guildServerId, lolAccountId1: id1, lolAccountId2: id2 } },
+          create: {
+            guildServerId,
+            lolAccountId1: id1,
+            lolAccountId2: id2,
+            sameTeamGames: sameTeam ? 1 : 0,
+            sameTeamWins: sameTeam && p1.win ? 1 : 0,
+            againstGames: sameTeam ? 0 : 1,
+            againstWins: !sameTeam && p1.win ? 1 : 0,
+          },
+          update: {
+            sameTeamGames: { increment: sameTeam ? 1 : 0 },
+            sameTeamWins: { increment: sameTeam && p1.win ? 1 : 0 },
+            againstGames: { increment: sameTeam ? 0 : 1 },
+            againstWins: { increment: !sameTeam && p1.win ? 1 : 0 },
+          },
+        });
+      }
+    }
+  }
+
   return true;
 }
 

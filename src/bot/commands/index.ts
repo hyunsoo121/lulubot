@@ -3,6 +3,7 @@ import {
   Collection,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
+  SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
 import * as register from './account/register';
 import * as myinfo from './account/myinfo';
@@ -16,12 +17,13 @@ import * as mostChampions from './stats/mostChampions';
 import * as titles from './stats/titles';
 import * as laneRanking from './stats/laneRanking';
 import * as titleRanking from './stats/titleRanking';
+import * as duo from './stats/duo';
 import * as deleteAccount from './account/deleteAccount';
 import * as reset from './admin/reset';
 import * as scanAll from './admin/scanAll';
 
 interface Command {
-  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
+  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
@@ -40,6 +42,7 @@ const commandList: Command[] = [
   titles,
   laneRanking,
   titleRanking,
+  duo,
   deleteAccount,
   reset,
   scanAll,

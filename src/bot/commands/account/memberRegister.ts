@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { registerAccount } from '../../../services/account';
 import { scanMatchesByUser } from '../../../services/matchScan';
+import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('멤버등록')
@@ -42,9 +43,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       `✅ 등록 완료!\n${target.displayName} → **${account.gameName}#${account.tagLine}** 연결되었습니다.`,
     );
 
-    scanMatchesByUser(discordUserId).catch((err) => {
-      console.error('[Scan] 백그라운드 스캔 오류:', err);
-    });
+    scanMatchesByUser(discordUserId, guildServerId)
+      .then(async () => {
+        if (guildServerId) {
+          await recalculateTitles(guildServerId).catch((e) =>
+            console.error('[memberRegister] 칭호 재계산 실패:', e),
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('[Scan] 백그라운드 스캔 오류:', err);
+      });
   } catch (err) {
     const message = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
     await interaction.editReply(`❌ ${message}`);
