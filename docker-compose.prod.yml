@@ -6,9 +6,24 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - lulubot-net
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
     networks:
       - lulubot-net
 
 networks:
   lulubot-net:
     driver: bridge
+
+volumes:
+  redis_data:
