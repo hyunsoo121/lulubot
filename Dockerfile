@@ -10,8 +10,11 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run build
 RUN npx prisma generate
+RUN npm run build
+
+# generated 파일을 dist 경로에도 복사
+RUN cp -r src/generated dist/generated
 
 # ─── Stage 2: Production ──────────────────────────────────
 FROM node:20-alpine AS runner
@@ -24,7 +27,6 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 RUN npm ci --omit=dev
-RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
