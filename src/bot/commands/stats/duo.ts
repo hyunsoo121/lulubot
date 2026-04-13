@@ -50,13 +50,9 @@ function buildEmbed(
   const lines = rows.map((row, idx) => {
     const rank = page * PAGE_SIZE + idx + 1;
     const sameWr =
-      row.sameTeamGames > 0
-        ? ((row.sameTeamWins / row.sameTeamGames) * 100).toFixed(1)
-        : '—';
+      row.sameTeamGames > 0 ? ((row.sameTeamWins / row.sameTeamGames) * 100).toFixed(1) : '—';
     const againstWr =
-      row.againstGames > 0
-        ? ((row.againstWins / row.againstGames) * 100).toFixed(1)
-        : '—';
+      row.againstGames > 0 ? ((row.againstWins / row.againstGames) * 100).toFixed(1) : '—';
 
     return [
       `**${rank}.** ${row.name1} & ${row.name2}`,
@@ -156,7 +152,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   collector.on('collect', async (btn) => {
     try {
       if (btn.user.id !== interaction.user.id) {
-        await btn.reply({ content: '본인이 실행한 명령어에만 사용할 수 있습니다.', ephemeral: true });
+        await btn.reply({
+          content: '본인이 실행한 명령어에만 사용할 수 있습니다.',
+          ephemeral: true,
+        });
         return;
       }
       if (btn.customId === 'duo_prev') page--;

@@ -14,9 +14,9 @@
 ---
 
 ### Docker 포트 충돌
-**증상**: `docker-compose up` 시 포트 이미 사용 중 오류  
-**원인**: 기존에 실행 중인 `matchday-postgres`, `matchday-redis` 컨테이너가 같은 포트 점유  
-**해결**: `docker stop matchday-postgres matchday-redis`
+**증상**: `docker compose up` 시 포트 이미 사용 중 오류  
+**원인**: 기존에 실행 중인 다른 컨테이너가 같은 포트 점유  
+**해결**: `docker ps`로 점유 컨테이너 확인 후 `docker stop <container>`
 
 ---
 
@@ -24,6 +24,13 @@
 **증상**: `PrismaClient` 생성 시 `adapter` 필수 오류  
 **원인**: Prisma 7에서 `adapter` 옵션이 필수로 변경됨  
 **해결**: Prisma 5로 다운그레이드, `prisma.config.ts` 삭제, schema에 `provider: "prisma-client-js"` 명시
+
+---
+
+### `prisma migrate dev` 데이터 리셋
+**증상**: 컬럼 추가 후 `prisma migrate dev` 실행 시 기존 데이터 전체 삭제  
+**원인**: `migrate dev`는 shadow DB를 사용하며, 마이그레이션 충돌 시 테이블을 재생성할 수 있음  
+**해결**: 컬럼 추가 시 `prisma db push` 사용 (데이터 유지, 스키마만 반영)
 
 ---
 
@@ -45,22 +52,29 @@
 
 ### `editReply`에 `MessageFlags.Ephemeral` 불가
 **증상**: `deferReply()` 후 `editReply`에 flags 전달 시 오류  
-**원인**: `deferReply()` 이후엔 공개/비공개 여부가 이미 결정됨 — `editReply`는 flags 변경 불가  
-**해결**: `deferReply({ flags: MessageFlags.Ephemeral })` 단계에서 지정, `editReply`는 문자열만 전달
+**원인**: `deferReply()` 이후엔 공개/비공개 여부가 이미 결정됨  
+**해결**: `deferReply({ flags: MessageFlags.Ephemeral })` 단계에서 지정
 
 ---
 
-### `SlashCommandOptionsOnlyBuilder` 타입 오류
-**증상**: `addStringOption` 등 체인 후 타입 불일치  
-**원인**: 옵션 추가 후 반환 타입이 `SlashCommandOptionsOnlyBuilder`로 좁혀짐  
-**해결**: `Command.data` 타입을 `SlashCommandBuilder | SlashCommandOptionsOnlyBuilder` 유니온으로 변경
+### `SlashCommandSubcommandsOnlyBuilder` 타입 오류
+**증상**: `addSubcommand()` 사용 커맨드 등록 시 타입 불일치  
+**원인**: 서브커맨드 사용 시 반환 타입이 `SlashCommandSubcommandsOnlyBuilder`로 좁혀짐  
+**해결**: `Command.data` 타입에 `SlashCommandSubcommandsOnlyBuilder` 유니온 추가
 
 ---
 
 ### DiscordAPIError[10062]: Unknown interaction
-**증상**: `deferReply()` 호출 시 Unknown interaction 오류 후 봇 크래시  
-**원인**: Discord interaction은 3초 내 응답 필수. nodemon 재시작 전에 들어온 interaction을 재시작 후 처리 시 토큰 만료  
-**해결**: `interactionCreate` 이벤트 핸들러의 catch 블록을 try-catch로 감싸 만료된 interaction 오류 무시
+**증상**: `deferReply()` 호출 시 Unknown interaction 오류  
+**원인**: Discord interaction은 3초 내 응답 필수. nodemon 재시작 전 들어온 interaction을 재시작 후 처리 시 토큰 만료  
+**해결**: `interactionCreate` 핸들러의 catch 블록에서 만료된 interaction 오류 무시
+
+---
+
+### autocomplete choices 25개 한계
+**증상**: 칭호가 25개 초과라 `addChoices`로 등록 불가  
+**원인**: Discord API는 choices를 최대 25개로 제한  
+**해결**: `isAutocomplete()` 인터랙션 방식으로 전환 — 입력값 기준으로 동적 필터링 후 응답
 
 ---
 
@@ -73,7 +87,7 @@
 ### 이전 봇의 커맨드가 남아있음
 **증상**: 새 봇에서 `/`를 누르면 구버전 커맨드가 표시됨  
 **원인**: 이전 봇이 길드 커맨드로 등록 — 글로벌 커맨드 덮어쓰기와 무관하게 유지됨  
-**해결**: `npm run clear:guild-commands` 실행 (`.env`에 `DISCORD_GUILD_ID` 필요)
+**해결**: `npm run clear:guild-commands` 실행
 
 ---
 
@@ -86,13 +100,9 @@
 
 ---
 
-### `queue=0`으로 토너먼트 게임 미탐지
-**증상**: `queue=0` 필터 적용 시 토너먼트 코드 게임이 하나도 조회되지 않음  
-**원인**: 토너먼트 코드 게임의 실제 queueId는 `0`이 아닌 `3130`임  
-**확인**: `debugQueue.ts` 스크립트로 직접 확인
-```
-KR_8115970364 → gameType: CUSTOM_GAME, gameMode: CLASSIC, queueId: 3130
-```
+### `queue=0`으로 커스텀 게임 미탐지
+**증상**: `queue=0` 필터 적용 시 커스텀 게임이 하나도 조회되지 않음  
+**원인**: 커스텀 게임의 실제 queueId는 `0`이 아닌 `3130`  
 **해결**: `queue: 3130` 으로 변경
 
 ---
@@ -107,54 +117,54 @@ KR_8115970364 → gameType: CUSTOM_GAME, gameMode: CLASSIC, queueId: 3130
 
 ---
 
-### `getMvpPuuid` reduce 빈 배열 오류
-**증상**: `TypeError: Reduce of empty array with no initial value`  
-**원인**: 비정상 종료된 매치의 경우 `win === true`인 참가자가 없을 수 있음  
-**해결**: 승리팀이 없으면 전체 참가자 중 딜 1위를 MVP로 처리
-
----
-
 ## 전적 스캔 로직
 
 ### 랭킹에 유저가 안 뜨는 문제 (UserGuildServer 누락)
-**증상**: `/등록` 완료 후 `/랭킹`에 본인이 표시되지 않음  
-**원인**: 이미 등록된 계정 재등록 시 "이미 등록된 계정입니다" 에러 경로에서 `UserGuildServer` upsert 코드에 도달하지 못함  
-**해결**: `account.ts`에서 이미 등록된 계정이라도 `UserGuildServer` upsert 후 에러 throw
+**증상**: `/계정등록` 완료 후 `/랭킹`에 본인이 표시되지 않음  
+**원인**: 이미 등록된 계정 재등록 시 에러 경로에서 `UserGuildServer` upsert에 도달하지 못함  
+**해결**: 이미 등록된 계정이라도 `UserGuildServer` upsert 후 에러 throw
 
 ---
 
 ### `/데이터초기화` 후 재갱신 시 전적 미복구
 **증상**: 초기화 후 `/전적갱신` 해도 전적이 0으로 남음  
-**원인**: `MatchRecord`가 `guildServerId: null`로 저장되어 있어 서버 기준 초기화 쿼리에서 누락 → `PlayerMatchStat`은 삭제됐지만 `MatchRecord`는 남아있음 → 재스캔 시 `MatchRecord` 존재 확인 → 스킵  
+**원인**: `MatchRecord`가 `guildServerId: null`로 저장되어 있어 서버 기준 초기화 쿼리에서 누락 → `PlayerMatchStat`은 삭제됐지만 `MatchRecord`는 남아있음 → 재스캔 시 스킵  
 **해결**:
-1. `reset.ts`: `guildServerId` 기준이 아닌 `lolAccountId` 기준으로 `PlayerMatchStat` 삭제
-2. `saveMatch`: `MatchRecord.create` → `upsert`로 변경, 해당 계정의 `PlayerMatchStat`이 없으면 삽입
+- `reset.ts`: `lolAccountId` 기준으로 `PlayerMatchStat` 삭제
+- `saveMatch`: `MatchRecord.create` → `upsert`로 변경, 해당 계정의 `PlayerMatchStat`이 없으면 삽입
 
 ---
 
 ### 스캔 중 서버 종료 시 부분 저장 문제
 **증상**: 스캔 도중 서버 종료 후 재시작하면 일부 매치만 저장된 채 증분 스캔으로 처리되어 오래된 매치 누락  
-**원인**: Riot API는 최신순으로 매치 ID를 반환 → 최신 매치부터 저장 → 중단 시 오래된 매치 미저장 → 다음 증분 스캔은 최신 저장 매치 이후만 조회  
-**해결**: 봇 재시작 시 진행 중이던 스캔 락을 감지 → 해당 유저의 `PlayerMatchStat` / `UserGlobalStat` 삭제 → 다음 갱신 시 전체 재스캔
+**원인**: Riot API는 최신순으로 매치 ID 반환 → 최신 매치부터 저장 → 중단 시 오래된 매치 미저장  
+**해결**: 봇 재시작 시 진행 중이던 스캔 락 감지 → 해당 유저의 `PlayerMatchStat` / `UserGlobalStat` 삭제 → 다음 갱신 시 전체 재스캔
 
 ---
 
 ### 스캔 락 stuck 문제
 **증상**: `/전적갱신` 실행 시 "이미 갱신이 진행 중입니다" 메시지가 계속 뜸  
-**원인**: nodemon 파일 변경 감지로 봇 재시작 시 Redis 스캔 락이 삭제되지 않고 남아있음  
+**원인**: nodemon 재시작 시 Redis 스캔 락이 삭제되지 않고 남아있음  
 **해결**: `ready` 이벤트에서 `clearAllScanLocks()` 호출하여 봇 시작 시 자동 초기화
 
 ---
 
 ### 여러 계정 보유 유저 랭킹 중복 표시
 **증상**: 같은 유저가 계정 수만큼 랭킹에 중복 표시됨  
-**원인**: `getServerRanking`이 `LolAccount` 단위로 엔트리를 생성  
-**해결**: `User` 단위로 집계하고 여러 계정 통계를 합산, Discord 멤버 표시 이름으로 출력
+**원인**: `LolAccount` 단위로 랭킹 엔트리 생성  
+**해결**: `User` 단위로 집계하고 여러 계정 통계 합산
 
 ---
 
-## 기타
+## 칭호 시스템
 
-### 6개월 스캔 제한 → 전체 기간으로 변경
-**배경**: Rate Limit 문제로 첫 스캔 범위를 6개월로 제한했으나, `queue=3130` 필터 적용 후 토너먼트 게임만 가져오므로 API 호출 수가 적어짐  
-**결정**: 제한 제거, 전체 기간 스캔으로 복원
+### Prisma groupBy로 분당 계산 불가
+**증상**: 칭호를 분당(per-minute) 기준으로 계산하려 했으나 groupBy와 game duration을 함께 집계하기 어려움  
+**원인**: Prisma groupBy는 집계 함수(sum, avg 등)만 지원하며 조인된 테이블의 필드를 함께 sum하기 어려움  
+**해결**: `findMany`로 `matchRecord.gameDurationSecs` 포함 조회 후 Map으로 직접 누적 집계하는 `aggregatePerMin` 함수 작성
+
+---
+
+### MVP 시스템 제거 후 isMvp 컬럼 마이그레이션
+**증상**: `PlayerMatchStat`에서 `isMvp` 컬럼 제거 필요  
+**해결**: `prisma db push`로 스키마 반영 (데이터 유지)

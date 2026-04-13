@@ -226,7 +226,13 @@ async function saveMatch(matchId: string, guildServerId: bigint | null): Promise
         const sameTeam = p1.teamId === p2.teamId;
 
         await prisma.duoStat.upsert({
-          where: { guildServerId_lolAccountId1_lolAccountId2: { guildServerId, lolAccountId1: id1, lolAccountId2: id2 } },
+          where: {
+            guildServerId_lolAccountId1_lolAccountId2: {
+              guildServerId,
+              lolAccountId1: id1,
+              lolAccountId2: id2,
+            },
+          },
           create: {
             guildServerId,
             lolAccountId1: id1,
