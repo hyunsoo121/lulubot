@@ -1,0 +1,14 @@
+services:
+  app:
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG:-latest}
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    networks:
+      - lulubot-net
+
+networks:
+  lulubot-net:
+    driver: bridge
