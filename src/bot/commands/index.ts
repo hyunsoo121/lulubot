@@ -3,21 +3,50 @@ import {
   Collection,
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
+  SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
 import * as register from './account/register';
 import * as myinfo from './account/myinfo';
 import * as create from './match/create';
 import * as record from './stats/record';
 import * as ranking from './stats/ranking';
+import * as scan from './stats/scan';
+import * as globalRecord from './stats/globalRecord';
+import * as recentMatch from './stats/recentMatch';
+import * as mostChampions from './stats/mostChampions';
+import * as titles from './stats/titles';
+import * as laneRanking from './stats/laneRanking';
+import * as titleRanking from './stats/titleRanking';
+import * as duo from './stats/duo';
+import * as deleteAccount from './account/deleteAccount';
+import * as reset from './admin/reset';
+import * as scanAll from './admin/scanAll';
 
 interface Command {
-  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
+  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder;
   execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 }
 
 export const commands = new Collection<string, Command>();
 
-const commandList: Command[] = [register, myinfo, create, record, ranking];
+const commandList: Command[] = [
+  register,
+  myinfo,
+  create,
+  record,
+  ranking,
+  scan,
+  globalRecord,
+  recentMatch,
+  mostChampions,
+  titles,
+  laneRanking,
+  titleRanking,
+  duo,
+  deleteAccount,
+  reset,
+  scanAll,
+];
 
 for (const command of commandList) {
   commands.set(command.data.name, command);
