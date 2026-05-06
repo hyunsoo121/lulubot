@@ -101,6 +101,10 @@ export function layout(title: string, body: string): string {
     }
     .api-table th { color: #9a9dbf; font-weight: 600; background: #121220; }
     .api-table code { font-family: monospace; color: #7c8dff; font-size: 0.85rem; }
+    .screenshots { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; margin: 24px 0; }
+    .screenshot-item { background: #16162a; border: 1px solid #2a2a45; border-radius: 12px; overflow: hidden; }
+    .screenshot-item img { width: 100%; display: block; }
+    .screenshot-item .caption { padding: 12px 16px; font-size: 0.85rem; color: #9a9dbf; }
     footer {
       text-align: center;
       padding: 32px;

@@ -124,6 +124,22 @@ const body = `
     </div>
   </div>
 
+  <h2>Screenshots</h2>
+  <div class="screenshots">
+    <div class="screenshot-item">
+      <img src="/screenshots/stats.png" alt="Player stats command" />
+      <div class="caption">/전적 — View personal stats and earned titles</div>
+    </div>
+    <div class="screenshot-item">
+      <img src="/screenshots/ranking.png" alt="Server ranking command" />
+      <div class="caption">/랭킹 — Server-wide player rankings</div>
+    </div>
+    <div class="screenshot-item">
+      <img src="/screenshots/recent.png" alt="Recent games command" />
+      <div class="caption">/최근경기 — Recent custom game results</div>
+    </div>
+  </div>
+
   <h2>Contact</h2>
   <p>For bug reports or inquiries, please reach out at <a href="mailto:ggom131@gmail.com">ggom131@gmail.com</a>.</p>
 </div>
