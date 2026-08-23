@@ -17,6 +17,14 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
+  if (!interaction.memberPermissions?.has('Administrator')) {
+    await interaction.reply({
+      content: '❌ 관리자만 사용할 수 있는 명령어입니다.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const target = interaction.options.getUser('유저', true);

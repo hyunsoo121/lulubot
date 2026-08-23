@@ -5,8 +5,7 @@ import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('계정등록')
-  .setDescription('라이엇 계정을 연결합니다.')
-  .addUserOption((option) => option.setName('유저').setDescription('등록할 유저').setRequired(true))
+  .setDescription('본인의 라이엇 계정을 연결합니다.')
   .addStringOption((option) =>
     option
       .setName('닉네임태그')
@@ -25,8 +24,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const target: User = interaction.options.getUser('유저', true);
-  const isSelf = target.id === interaction.user.id;
+  const target: User = interaction.user;
   const discordUserId = BigInt(target.id);
   const guildServerId = interaction.guildId ? BigInt(interaction.guildId) : undefined;
 
@@ -38,9 +36,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       guildServerId,
     );
 
-    const targetLabel = isSelf ? '' : `${target.displayName} → `;
     await interaction.editReply(
-      `✅ 등록 완료!\n${targetLabel}**${account.gameName}#${account.tagLine}** 계정이 연결되었습니다.\n⏳ 전적 갱신을 시작합니다. 완료되면 알려드립니다.`,
+      `✅ 등록 완료!\n**${account.gameName}#${account.tagLine}** 계정이 연결되었습니다.\n⏳ 전적 갱신을 시작합니다. 완료되면 알려드립니다.`,
     );
 
     // 백그라운드 스캔 — 완료 시 채널 ephemeral 메시지 발송
