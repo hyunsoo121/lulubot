@@ -8,14 +8,13 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { getDuoRanking } from '../../../services/stats';
-import { readFilterOptions } from '../shared/filterOptions';
 import prisma from '../../../lib/prisma';
 
 const PAGE_SIZE = 10;
 
 export const data = new SlashCommandBuilder()
   .setName('듀오전적')
-  .setDescription('서버 내 듀오(같이 플레이한) 전적을 조회합니다. (기본: 서버 기반)')
+  .setDescription('서버 내 듀오(같이 플레이한) 전적을 조회합니다. (서버 기반)')
   .addStringOption((option) =>
     option
       .setName('유형')
@@ -26,18 +25,6 @@ export const data = new SlashCommandBuilder()
         { name: '적팀 승률', value: 'against_wr' },
         { name: '같이 플레이 횟수', value: 'same_games' },
       ),
-  )
-  .addBooleanOption((option) =>
-    option
-      .setName('서버기반')
-      .setDescription('서버 등록 계정끼리만 진행된 매치만 포함 (기본값 true, 참가자 8명 이상)')
-      .setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('시작일').setDescription('YYYY-MM-DD (이 날짜 이후 매치만)').setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('종료일').setDescription('YYYY-MM-DD (이 날짜 이전 매치만)').setRequired(false),
   );
 
 interface DuoRow {
@@ -110,15 +97,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const filterResult = readFilterOptions(interaction, { defaultServerOnly: true });
-  if (!filterResult.ok) {
-    await interaction.editReply(filterResult.error);
-    return;
-  }
-
   const sortType = interaction.options.getString('유형') ?? 'same_games';
 
-  const duoRanking = await getDuoRanking(guildServerId, filterResult.opts);
+  const duoRanking = await getDuoRanking(guildServerId, { serverOnly: true });
 
   if (duoRanking.length === 0) {
     await interaction.editReply('아직 듀오 데이터가 없습니다. 전적 갱신 후 다시 시도해주세요.');

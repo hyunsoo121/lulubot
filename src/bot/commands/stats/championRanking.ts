@@ -9,7 +9,6 @@ import {
 } from 'discord.js';
 import { getChampionRanking } from '../../../services/stats';
 import { getAllChampions, getChampionName } from '../../../lib/championNames';
-import { readFilterOptions } from '../shared/filterOptions';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
@@ -21,18 +20,6 @@ export const data = new SlashCommandBuilder()
       .setDescription('조회할 챔피언')
       .setRequired(true)
       .setAutocomplete(true),
-  )
-  .addBooleanOption((option) =>
-    option
-      .setName('서버기반')
-      .setDescription('서버 등록 계정끼리만 진행된 매치만 포함 (참가자 8명 이상)')
-      .setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('시작일').setDescription('YYYY-MM-DD (이 날짜 이후 매치만)').setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('종료일').setDescription('YYYY-MM-DD (이 날짜 이전 매치만)').setRequired(false),
   );
 
 const PAGE_SIZE = 10;
@@ -79,15 +66,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const filterResult = readFilterOptions(interaction);
-  if (!filterResult.ok) {
-    await interaction.editReply(filterResult.error);
-    return;
-  }
-
   const guildServerId = BigInt(interaction.guildId!);
   const championName = await getChampionName(championId);
-  const ranking = await getChampionRanking(guildServerId, championId, filterResult.opts);
+  const ranking = await getChampionRanking(guildServerId, championId);
 
   if (ranking.length === 0) {
     await interaction.editReply(`${championName} 랭킹 데이터가 없습니다.`);

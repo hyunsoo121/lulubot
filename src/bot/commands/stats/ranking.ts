@@ -8,24 +8,11 @@ import {
 } from 'discord.js';
 import { getRanking, RankingEntry } from '../../../services/stats';
 import { getTitlesForAccount } from '../../../services/titleService';
-import { readFilterOptions } from '../shared/filterOptions';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
   .setName('랭킹')
-  .setDescription('서버 멤버의 종합 랭킹을 조회합니다. (기본: 서버 기반)')
-  .addBooleanOption((option) =>
-    option
-      .setName('서버기반')
-      .setDescription('서버 등록 계정끼리만 진행된 매치만 포함 (기본값 true, 참가자 8명 이상)')
-      .setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('시작일').setDescription('YYYY-MM-DD (이 날짜 이후 매치만)').setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('종료일').setDescription('YYYY-MM-DD (이 날짜 이전 매치만)').setRequired(false),
-  );
+  .setDescription('서버 멤버의 종합 랭킹을 조회합니다. (서버 기반)');
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const PAGE_SIZE = 10;
@@ -68,13 +55,13 @@ async function buildRows(
   );
 }
 
-function buildEmbed(rows: string[], serverOnly: boolean, page: number, totalPages: number) {
+function buildEmbed(rows: string[], page: number, totalPages: number) {
   return new EmbedBuilder()
     .setTitle('🏆 서버 랭킹')
     .setDescription(rows.join('\n'))
     .setColor(0xffd700)
     .setFooter({
-      text: `${serverOnly ? '서버 기반' : '전체 게임 기준'} · 판수 → 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지`,
+      text: `서버 기반 · 판수 → 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지`,
     })
     .setTimestamp();
 }
@@ -97,12 +84,6 @@ function buildButtons(page: number, totalPages: number) {
 export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
-  const filterResult = readFilterOptions(interaction, { defaultServerOnly: true });
-  if (!filterResult.ok) {
-    await interaction.editReply(filterResult.error);
-    return;
-  }
-
   const guildServerId = BigInt(interaction.guildId!);
 
   await prisma.guildServer.upsert({
@@ -111,7 +92,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     create: { id: guildServerId, serverName: interaction.guild?.name },
   });
 
-  const entries = await getRanking(guildServerId, filterResult.opts);
+  const entries = await getRanking(guildServerId, { serverOnly: true });
 
   if (entries.length === 0) {
     await interaction.editReply(
@@ -122,11 +103,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   const totalPages = Math.ceil(entries.length / PAGE_SIZE);
   let page = 0;
-  const serverOnly = filterResult.opts.serverOnly ?? false;
 
   const rows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
   const message = await interaction.editReply({
-    embeds: [buildEmbed(rows, serverOnly, page, totalPages)],
+    embeds: [buildEmbed(rows, page, totalPages)],
     components: totalPages > 1 ? [buildButtons(page, totalPages)] : [],
   });
 
@@ -145,7 +125,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     const newRows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
     await btn.update({
-      embeds: [buildEmbed(newRows, serverOnly, page, totalPages)],
+      embeds: [buildEmbed(newRows, page, totalPages)],
       components: [buildButtons(page, totalPages)],
     });
   });

@@ -9,11 +9,10 @@ import {
 import prisma from '../../../lib/prisma';
 import { getServerAccountIds, getServerMatchIds } from '../../../services/titleService';
 import { filterMatchIds } from '../../../services/matchFilter';
-import { readFilterOptions } from '../shared/filterOptions';
 
 export const data = new SlashCommandBuilder()
   .setName('라인랭킹')
-  .setDescription('라인별 특화 스탯 랭킹을 조회합니다. (기본: 서버 기반)')
+  .setDescription('라인별 특화 스탯 랭킹을 조회합니다. (서버 기반)')
   .addStringOption((option) =>
     option
       .setName('라인')
@@ -26,18 +25,6 @@ export const data = new SlashCommandBuilder()
         { name: '원딜', value: 'BOTTOM' },
         { name: '서폿', value: 'UTILITY' },
       ),
-  )
-  .addBooleanOption((option) =>
-    option
-      .setName('서버기반')
-      .setDescription('서버 등록 계정끼리만 진행된 매치만 포함 (기본값 true, 참가자 8명 이상)')
-      .setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('시작일').setDescription('YYYY-MM-DD (이 날짜 이후 매치만)').setRequired(false),
-  )
-  .addStringOption((option) =>
-    option.setName('종료일').setDescription('YYYY-MM-DD (이 날짜 이전 매치만)').setRequired(false),
   );
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -176,7 +163,6 @@ function buildTable(entries: [string, LaneStat][], position: Position, offset: n
 function buildEmbed(
   entries: [string, LaneStat][],
   position: Position,
-  serverOnly: boolean,
   offset: number,
   page: number,
   totalPages: number,
@@ -187,7 +173,7 @@ function buildEmbed(
     .setDescription(buildTable(entries, position, offset))
     .setColor(0x5865f2)
     .setFooter({
-      text: `${MIN_GAMES}판 이상 · ${serverOnly ? '서버 기반' : '전체 게임 기준'} · 판수 → 승률 → KDA 순 · ${page + 1}/${totalPages} 페이지`,
+      text: `${MIN_GAMES}판 이상 · 서버 기반 · 판수 → 승률 → KDA 순 · ${page + 1}/${totalPages} 페이지`,
     })
     .setTimestamp();
 }
@@ -213,13 +199,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const position = interaction.options.getString('라인', true) as Position;
   const guildServerId = BigInt(interaction.guildId!);
 
-  const filterResult = readFilterOptions(interaction, { defaultServerOnly: true });
-  if (!filterResult.ok) {
-    await interaction.editReply(filterResult.error);
-    return;
-  }
-  const serverOnly = filterResult.opts.serverOnly ?? false;
-
   // 서버 등록 유저 목록
   const users = await prisma.user.findMany({
     where: {
@@ -244,7 +223,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const allAccountIds = [...accountIdToDiscord.keys()];
 
   const allMatchIds = await getServerMatchIds(await getServerAccountIds(guildServerId));
-  const matchIds = await filterMatchIds(allMatchIds, allAccountIds, filterResult.opts);
+  const matchIds = await filterMatchIds(allMatchIds, allAccountIds, { serverOnly: true });
 
   if (matchIds.length === 0) {
     await interaction.editReply('조건에 맞는 전적 데이터가 없습니다.');
@@ -361,9 +340,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   let page = 0;
 
   const message = await interaction.editReply({
-    embeds: [
-      buildEmbed(namedEntries.slice(0, PAGE_SIZE), position, serverOnly, 0, page, totalPages),
-    ],
+    embeds: [buildEmbed(namedEntries.slice(0, PAGE_SIZE), position, 0, page, totalPages)],
     components: totalPages > 1 ? [buildButtons(page, totalPages)] : [],
   });
 
@@ -388,7 +365,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           buildEmbed(
             namedEntries.slice(offset, offset + PAGE_SIZE),
             position,
-            serverOnly,
             offset,
             page,
             totalPages,
