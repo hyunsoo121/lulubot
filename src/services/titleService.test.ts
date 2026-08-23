@@ -151,6 +151,7 @@ const { db, resetDb, fakePrisma, statSeq } = vi.hoisted(() => {
         return rows.map((r) => projectSelect(r, select));
       },
       groupBy: async ({
+        by,
         where,
         _avg,
         _sum,
@@ -165,14 +166,16 @@ const { db, resetDb, fakePrisma, statSeq } = vi.hoisted(() => {
         const rows = db.stats.filter((r) =>
           matchesWhere(r as unknown as Record<string, unknown>, where),
         );
-        const groups = new Map<bigint, FixtureStat[]>();
+        const groupField = by[0] as keyof FixtureStat;
+        const groups = new Map<FixtureStat[keyof FixtureStat], FixtureStat[]>();
         for (const r of rows) {
-          const arr = groups.get(r.lolAccountId) ?? [];
+          const key = r[groupField];
+          const arr = groups.get(key) ?? [];
           arr.push(r);
-          groups.set(r.lolAccountId, arr);
+          groups.set(key, arr);
         }
-        return [...groups.entries()].map(([lolAccountId, arr]) => {
-          const result: Record<string, unknown> = { lolAccountId, _count: { id: arr.length } };
+        return [...groups.entries()].map(([key, arr]) => {
+          const result: Record<string, unknown> = { [groupField]: key, _count: { id: arr.length } };
           if (_avg) {
             const field = Object.keys(_avg)[0] as keyof FixtureStat;
             result._avg = {
@@ -216,6 +219,15 @@ function addMember(guildServerId: bigint, accountId: bigint) {
   }
 }
 
+// 서버기반(8/10 참가자) 필터를 통과시키기 위한 필러 참가자 풀.
+// 한 매치에 8명씩 채워 넣되, 풀 크기를 FILLERS_PER_MATCH와 서로소인 소수로 잡고
+// 라운드로빈으로 순환시켜, 같은 필러가 항상 같은 승/패 슬롯에 고정되지 않도록 한다.
+// (풀 크기가 8의 배수였을 때는 특정 필러가 매번 승리만/패배만 해서 100% 승률·긴 연패
+//  스트릭을 만들어 MVP/FEEDER의 1위를 가로채는 문제가 있었음)
+const FILLER_POOL: bigint[] = Array.from({ length: 41 }, (_, i) => BigInt(9000 + i));
+const FILLERS_PER_MATCH = 8;
+let fillerCursor = 0;
+
 function addMatch(id: bigint, opts: { playedAt?: Date; gameDurationSecs?: number } = {}) {
   const m: FixtureMatch = {
     id,
@@ -224,6 +236,28 @@ function addMatch(id: bigint, opts: { playedAt?: Date; gameDurationSecs?: number
   };
   db.matches.push(m);
   db.matchesById.set(id, m);
+
+  for (let k = 0; k < FILLERS_PER_MATCH; k++) {
+    const fillerId = FILLER_POOL[fillerCursor % FILLER_POOL.length];
+    // 풀 크기(41)가 홀수라 같은 필러를 다시 뽑을 때마다 cursor의 홀짝이 뒤집혀
+    // 승/패가 매 등장마다 번갈아 나온다 (연승/연패 스트릭 방지)
+    const isWin = fillerCursor % 2 === 0;
+    fillerCursor++;
+    addMember(GUILD_A, fillerId);
+    addStat(id, fillerId, {
+      kills: 1,
+      deaths: 2,
+      assists: 1,
+      cs: 50,
+      damageDealt: 1000,
+      damageTaken: 1000,
+      goldEarned: 1000,
+      visionScore: 5,
+      killParticipation: 0.3,
+      isWin,
+    });
+  }
+
   return m;
 }
 
@@ -270,7 +304,13 @@ function addStat(matchId: bigint, lolAccountId: bigint, overrides: Partial<Fixtu
 
 // ─── 테스트 ─────────────────────────────────────────────────────────────────
 
-import { recalculateTitles, getTitleRanking, topAllBy, buildPerMinMap } from './titleService';
+import {
+  recalculateTitles,
+  getTitleRanking,
+  topAllBy,
+  buildPerMinMap,
+  TITLE_DEFINITIONS,
+} from './titleService';
 
 const GUILD_A = 1000n;
 
@@ -372,8 +412,9 @@ describe('크로스-서버 오염 회귀 테스트', () => {
 
   it('getTitleRanking도 서버 미소속 계정을 순위에 포함하지 않는다', async () => {
     const ranking = await getTitleRanking(GUILD_A, '학살자');
-    expect(ranking.map((r) => r.lolAccountId)).not.toContain(OUTSIDER);
-    expect(ranking).toHaveLength(ACCOUNTS.length);
+    const ids = ranking.map((r) => r.lolAccountId);
+    expect(ids).not.toContain(OUTSIDER);
+    for (const id of ACCOUNTS) expect(ids).toContain(id);
   });
 });
 
@@ -422,6 +463,175 @@ describe('포지션 기반 칭호', () => {
   it('TOP 포지션 칭호는 JUNGLE만 플레이한 계정을 포함하지 않는다', async () => {
     const ranking = await getTitleRanking(GUILD_A, '고속도로건설자');
     const ids = ranking.map((r) => r.lolAccountId);
-    expect(ids).toEqual([TOP_PLAYER]);
+    expect(ids[0]).toBe(TOP_PLAYER);
+    expect(ids).not.toContain(OFF_POSITION_PLAYER);
+  });
+});
+
+describe('전체 57개 칭호 — 정확한 승자 배정 + recalc/ranking 일치성', () => {
+  // MVP: 모든 지표를 극단적으로 높게(데스는 0으로 낮게) 설정 — 사실상 모든 칭호의 우승 후보
+  // FEEDER: 데스만 극단적으로 높고 전패 — 흑백모니터/연패왕 전용
+  // GHOST: 킬관여율만 극단적으로 낮음 — 투명인간 전용
+  const MVP = 100n;
+  const FEEDER = 101n;
+  const GHOST = 102n;
+
+  const MVP_RICH: Partial<FixtureStat> = {
+    kills: 12,
+    deaths: 0,
+    assists: 10,
+    cs: 220,
+    damageDealt: 25000,
+    damageTaken: 20000,
+    goldEarned: 15000,
+    visionScore: 40,
+    killParticipation: 0.8,
+    turretKills: 3,
+    firstBloodKill: true,
+    pentaKills: 1,
+    quadraKills: 1,
+    dragonKills: 2,
+    baronKills: 1,
+    wardsPlaced: 10,
+    wardsKilled: 5,
+    controlWardsPlaced: 4,
+    dmgShare: 0.4,
+    goldShare: 0.3,
+    dmgPerGold: 1.8,
+    timeCCingOthers: 20,
+    enemyJungleMinions: 6,
+    objectivesStolen: 1,
+    healsOnTeammates: 2000,
+    shieldOnTeammates: 1500,
+    soloKills: 2,
+    isWin: true,
+  };
+
+  const FEEDER_LOW: Partial<FixtureStat> = {
+    kills: 1,
+    deaths: 10,
+    assists: 1,
+    cs: 50,
+    damageDealt: 3000,
+    damageTaken: 5000,
+    goldEarned: 5000,
+    visionScore: 5,
+    killParticipation: 0.2,
+    dmgShare: 0.05,
+    goldShare: 0.05,
+    dmgPerGold: 0.5,
+    isWin: false,
+    position: 'TOP',
+  };
+
+  const GHOST_LOW_KP: Partial<FixtureStat> = {
+    kills: 3,
+    deaths: 3,
+    assists: 2,
+    cs: 80,
+    damageDealt: 6000,
+    damageTaken: 6000,
+    goldEarned: 6000,
+    visionScore: 10,
+    killParticipation: 0.05, // 투명인간 대상 — 최저 킬관여율
+    dmgShare: 0.1,
+    goldShare: 0.1,
+    dmgPerGold: 0.6,
+    position: 'JUNGLE',
+  };
+
+  let seq = 0;
+  const nextMatchId = () => BigInt(10000 + seq++);
+  const nextDay = (n: number) => new Date(2026, 0, 1 + n);
+
+  beforeEach(() => {
+    addMember(GUILD_A, MVP);
+    addMember(GUILD_A, FEEDER);
+    addMember(GUILD_A, GHOST);
+
+    let day = 0;
+    // MVP: 5개 포지션 × 3게임(30분) — 포지션별 칭호 전부 석권
+    for (const position of ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY']) {
+      for (let i = 0; i < 3; i++) {
+        const matchId = nextMatchId();
+        addMatch(matchId, { playedAt: nextDay(day++), gameDurationSecs: 1800 });
+        addStat(matchId, MVP, { ...MVP_RICH, position });
+      }
+    }
+    // MVP: 40분 이상(끈기왕용) 3게임
+    for (let i = 0; i < 3; i++) {
+      const matchId = nextMatchId();
+      addMatch(matchId, { playedAt: nextDay(day++), gameDurationSecs: 2700 });
+      addStat(matchId, MVP, { ...MVP_RICH, position: 'MIDDLE' });
+    }
+    // MVP: 25분 이하(속전속결용) 3게임
+    for (let i = 0; i < 3; i++) {
+      const matchId = nextMatchId();
+      addMatch(matchId, { playedAt: nextDay(day++), gameDurationSecs: 1200 });
+      addStat(matchId, MVP, { ...MVP_RICH, position: 'MIDDLE' });
+    }
+
+    // FEEDER: 5연패, TOP만 플레이
+    for (let i = 0; i < 5; i++) {
+      const matchId = nextMatchId();
+      addMatch(matchId, { playedAt: nextDay(day++), gameDurationSecs: 1800 });
+      addStat(matchId, FEEDER, FEEDER_LOW);
+    }
+
+    // GHOST: 3게임, JUNGLE만 플레이, 1승 2패 (신인왕 후보에서 자연 배제)
+    for (let i = 0; i < 3; i++) {
+      const matchId = nextMatchId();
+      addMatch(matchId, { playedAt: nextDay(day++), gameDurationSecs: 1800 });
+      addStat(matchId, GHOST, { ...GHOST_LOW_KP, isWin: i === 0 });
+    }
+  });
+
+  const EXPECTED_WINNER: Record<string, bigint> = {
+    흑백모니터: FEEDER,
+    연패왕: FEEDER,
+    투명인간: GHOST,
+  };
+
+  it.each(Object.keys(TITLE_DEFINITIONS))('%s — 예상 계정이 1위를 차지한다', async (code) => {
+    const expected = EXPECTED_WINNER[code] ?? MVP;
+
+    const ranking = await getTitleRanking(GUILD_A, code);
+    expect(ranking.length, `${code}: 순위 데이터가 비어있음`).toBeGreaterThan(0);
+    expect(ranking[0].lolAccountId, `${code}: 1위 계정이 예상과 다름`).toBe(expected);
+  });
+
+  it('recalculateTitles가 저장하는 우승자가 getTitleRanking의 1위와 일치한다 (모든 칭호)', async () => {
+    await recalculateTitles(GUILD_A);
+
+    for (const code of Object.keys(TITLE_DEFINITIONS)) {
+      const call = fakePrisma.userTitle.createMany.mock.calls.find(
+        (c) => c[0].data[0]?.titleCode === code,
+      );
+      const expected = EXPECTED_WINNER[code] ?? MVP;
+      expect(call, `${code}: createMany 호출을 찾을 수 없음`).toBeDefined();
+      const holderIds = call![0].data.map((d) => d.lolAccountId);
+      expect(holderIds, `${code}: 저장된 우승자가 예상과 다름`).toContain(expected);
+      expect(holderIds).toHaveLength(1);
+    }
+  });
+
+  it('연승왕: 21연승이 정확히 집계된다', async () => {
+    const ranking = await getTitleRanking(GUILD_A, '연승왕');
+    expect(ranking[0]).toEqual({ lolAccountId: MVP, value: 21 });
+  });
+
+  it('신인왕: 첫 10게임 100% 승률이 정확히 집계된다', async () => {
+    const ranking = await getTitleRanking(GUILD_A, '신인왕');
+    expect(ranking[0]).toEqual({ lolAccountId: MVP, value: 1 });
+  });
+
+  it('오브젝트마스터: 정글 드래곤+바론 합산이 정확히 집계된다 (3게임 × 3마리)', async () => {
+    const ranking = await getTitleRanking(GUILD_A, '오브젝트마스터');
+    expect(ranking[0]).toEqual({ lolAccountId: MVP, value: 9 });
+  });
+
+  it('개근상: 게임 수가 가장 많은 계정이 1위다', async () => {
+    const ranking = await getTitleRanking(GUILD_A, '개근상');
+    expect(ranking[0]).toEqual({ lolAccountId: MVP, value: 21 });
   });
 });
