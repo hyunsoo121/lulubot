@@ -4,11 +4,6 @@ export interface RiotAccount {
   tagLine: string;
 }
 
-export interface MatchCallbackPayload {
-  matchId: string;
-  tournamentCode: string;
-}
-
 export interface RiotMatchParticipant {
   puuid: string;
   teamId: number; // 100=BLUE, 200=RED
