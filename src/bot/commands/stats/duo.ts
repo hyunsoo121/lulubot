@@ -7,13 +7,15 @@ import {
   MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
+import { getDuoRanking } from '../../../services/stats';
+import { readFilterOptions } from '../shared/filterOptions';
 import prisma from '../../../lib/prisma';
 
 const PAGE_SIZE = 10;
 
 export const data = new SlashCommandBuilder()
-  .setName('듀오')
-  .setDescription('서버 내 듀오(같이 플레이한) 통계를 조회합니다.')
+  .setName('듀오전적')
+  .setDescription('서버 내 듀오(같이 플레이한) 전적을 조회합니다. (기본: 서버 기반)')
   .addStringOption((option) =>
     option
       .setName('유형')
@@ -24,6 +26,18 @@ export const data = new SlashCommandBuilder()
         { name: '적팀 승률', value: 'against_wr' },
         { name: '같이 플레이 횟수', value: 'same_games' },
       ),
+  )
+  .addBooleanOption((option) =>
+    option
+      .setName('서버기반')
+      .setDescription('서버 등록 계정끼리만 진행된 매치만 포함 (기본값 true, 참가자 8명 이상)')
+      .setRequired(false),
+  )
+  .addStringOption((option) =>
+    option.setName('시작일').setDescription('YYYY-MM-DD (이 날짜 이후 매치만)').setRequired(false),
+  )
+  .addStringOption((option) =>
+    option.setName('종료일').setDescription('YYYY-MM-DD (이 날짜 이전 매치만)').setRequired(false),
   );
 
 interface DuoRow {
@@ -54,15 +68,18 @@ function buildEmbed(
     const againstWr =
       row.againstGames > 0 ? ((row.againstWins / row.againstGames) * 100).toFixed(1) : '—';
 
+    const sameTeamLosses = row.sameTeamGames - row.sameTeamWins;
+    const againstLosses = row.againstGames - row.againstWins;
+
     return [
       `**${rank}.** ${row.name1} & ${row.name2}`,
-      `　같은팀: ${row.sameTeamGames}전 ${row.sameTeamWins}승 (${sameWr}%)` +
-        `　상대팀: ${row.againstGames}전 ${row.againstWins}승 (${againstWr}%)`,
+      `　같은팀: ${row.sameTeamWins}승 ${sameTeamLosses}패 (${sameWr}%)` +
+        `　상대팀: ${row.againstWins}승 ${againstLosses}패 (${againstWr}%)`,
     ].join('\n');
   });
 
   return new EmbedBuilder()
-    .setTitle(`🤝 듀오 통계 — ${sortLabel[sortType] ?? '같이 플레이 횟수'}`)
+    .setTitle(`🤝 듀오 전적 — ${sortLabel[sortType] ?? '같이 플레이 횟수'}`)
     .setColor(0x5865f2)
     .setDescription(lines.length > 0 ? lines.join('\n\n') : '데이터가 없습니다.')
     .setFooter({ text: `페이지 ${page + 1}/${totalPages}` })
@@ -93,28 +110,36 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
+  const filterResult = readFilterOptions(interaction, { defaultServerOnly: true });
+  if (!filterResult.ok) {
+    await interaction.editReply(filterResult.error);
+    return;
+  }
+
   const sortType = interaction.options.getString('유형') ?? 'same_games';
 
-  const allStats = await prisma.duoStat.findMany({
-    where: { guildServerId },
-    include: {
-      lolAccount1: true,
-      lolAccount2: true,
-    },
-  });
+  const duoRanking = await getDuoRanking(guildServerId, filterResult.opts);
 
-  if (allStats.length === 0) {
+  if (duoRanking.length === 0) {
     await interaction.editReply('아직 듀오 데이터가 없습니다. 전적 갱신 후 다시 시도해주세요.');
     return;
   }
 
-  const rows: DuoRow[] = allStats.map((s) => ({
-    name1: `${s.lolAccount1.gameName}#${s.lolAccount1.tagLine}`,
-    name2: `${s.lolAccount2.gameName}#${s.lolAccount2.tagLine}`,
-    sameTeamGames: s.sameTeamGames,
-    sameTeamWins: s.sameTeamWins,
-    againstGames: s.againstGames,
-    againstWins: s.againstWins,
+  const accountIds = [...new Set(duoRanking.flatMap((d) => [d.lolAccountId1, d.lolAccountId2]))];
+  const accounts = await prisma.lolAccount.findMany({ where: { id: { in: accountIds } } });
+  const accountMap = new Map(accounts.map((a) => [a.id, a]));
+  const nameOf = (id: bigint) => {
+    const a = accountMap.get(id);
+    return a ? `${a.gameName}#${a.tagLine}` : '알 수 없음';
+  };
+
+  const rows: DuoRow[] = duoRanking.map((d) => ({
+    name1: nameOf(d.lolAccountId1),
+    name2: nameOf(d.lolAccountId2),
+    sameTeamGames: d.sameTeamGames,
+    sameTeamWins: d.sameTeamWins,
+    againstGames: d.againstGames,
+    againstWins: d.againstWins,
   }));
 
   // 정렬
@@ -131,8 +156,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       return wrB - wrA;
     });
   } else {
-    // same_games (기본)
-    rows.sort((a, b) => b.sameTeamGames + b.againstGames - (a.sameTeamGames + a.againstGames));
+    // same_games (기본) — "같이 플레이"는 같은 팀으로 뛴 것만 의미
+    rows.sort((a, b) => b.sameTeamGames - a.sameTeamGames);
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -165,7 +190,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         components: [buildButtons(page, totalPages)],
       });
     } catch (e) {
-      console.error('[듀오] 버튼 처리 오류:', e);
+      console.error('[듀오전적] 버튼 처리 오류:', e);
     }
   });
 

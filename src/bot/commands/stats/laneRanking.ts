@@ -7,10 +7,13 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import prisma from '../../../lib/prisma';
+import { getServerAccountIds, getServerMatchIds } from '../../../services/titleService';
+import { filterMatchIds } from '../../../services/matchFilter';
+import { readFilterOptions } from '../shared/filterOptions';
 
 export const data = new SlashCommandBuilder()
   .setName('라인랭킹')
-  .setDescription('라인별 특화 스탯 랭킹을 조회합니다.')
+  .setDescription('라인별 특화 스탯 랭킹을 조회합니다. (기본: 서버 기반)')
   .addStringOption((option) =>
     option
       .setName('라인')
@@ -23,6 +26,18 @@ export const data = new SlashCommandBuilder()
         { name: '원딜', value: 'BOTTOM' },
         { name: '서폿', value: 'UTILITY' },
       ),
+  )
+  .addBooleanOption((option) =>
+    option
+      .setName('서버기반')
+      .setDescription('서버 등록 계정끼리만 진행된 매치만 포함 (기본값 true, 참가자 8명 이상)')
+      .setRequired(false),
+  )
+  .addStringOption((option) =>
+    option.setName('시작일').setDescription('YYYY-MM-DD (이 날짜 이후 매치만)').setRequired(false),
+  )
+  .addStringOption((option) =>
+    option.setName('종료일').setDescription('YYYY-MM-DD (이 날짜 이전 매치만)').setRequired(false),
   );
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -59,63 +74,120 @@ interface LaneStat {
   totalGameDurationSecs: number;
 }
 
-function dpm(totalDamage: number, totalSecs: number) {
+function dpm(totalDamage: number, totalSecs: number): string {
   return Math.round(totalDamage / (totalSecs / 60)).toLocaleString('ko-KR');
 }
 
-function formatStatLine(stat: LaneStat, position: Position): string {
-  const wr = ((stat.wins / stat.games) * 100).toFixed(1);
-  const kda = ((stat.kills + stat.assists) / Math.max(stat.deaths, 1)).toFixed(2);
-  const kp = ((stat.totalKillParticipation / stat.games) * 100).toFixed(0);
-  const base = `${stat.games}판 ${wr}% KDA ${kda} 킬관여 ${kp}%`;
+function pad(s: string, len: number): string {
+  if (s.length >= len) return s.slice(0, len);
+  return s + ' '.repeat(len - s.length);
+}
+
+/** 포지션별 표 컬럼 정의: [헤더, 너비, 값추출함수] */
+function columnsFor(
+  position: Position,
+): { header: string; width: number; value: (s: LaneStat) => string }[] {
+  const base: { header: string; width: number; value: (s: LaneStat) => string }[] = [
+    { header: '판수', width: 4, value: (s) => `${s.games}` },
+    { header: '승률', width: 5, value: (s) => `${((s.wins / s.games) * 100).toFixed(0)}%` },
+    {
+      header: 'KDA',
+      width: 5,
+      value: (s) => ((s.kills + s.assists) / Math.max(s.deaths, 1)).toFixed(2),
+    },
+    {
+      header: '킬관여',
+      width: 5,
+      value: (s) => `${((s.totalKillParticipation / s.games) * 100).toFixed(0)}%`,
+    },
+  ];
 
   switch (position) {
-    case 'TOP': {
-      const dmgPm = dpm(stat.totalDamage, stat.totalGameDurationSecs);
-      const tankPm = dpm(stat.totalDamageTaken, stat.totalGameDurationSecs);
-      return `${base} | DPM ${dmgPm} | 탱킹/분 ${tankPm} | 솔로킬 ${stat.totalSoloKills}회`;
-    }
-    case 'JUNGLE': {
-      const dmgPm = dpm(stat.totalDamage, stat.totalGameDurationSecs);
-      const avgObj = (stat.totalDragonBaron / stat.games).toFixed(1);
-      const avgSteal = (stat.totalEnemyJungle / stat.games).toFixed(1);
-      const avgCc = Math.round(stat.totalCcTime / stat.games);
-      return `${base} | DPM ${dmgPm} | 오브젝트 ${avgObj} | 적정글 ${avgSteal}개 | CC ${avgCc}초`;
-    }
-    case 'MIDDLE': {
-      const dmgPm = dpm(stat.totalDamage, stat.totalGameDurationSecs);
-      const avgCs = Math.round(stat.totalCs / stat.games);
-      const avgGold = Math.round(stat.totalGold / stat.games).toLocaleString('ko-KR');
-      return `${base} | DPM ${dmgPm} | CS ${avgCs} | 골드 ${avgGold} | 솔로킬 ${stat.totalSoloKills}회`;
-    }
-    case 'BOTTOM': {
-      const dmgPm = dpm(stat.totalDamage, stat.totalGameDurationSecs);
-      const avgCs = Math.round(stat.totalCs / stat.games);
-      const avgGold = Math.round(stat.totalGold / stat.games).toLocaleString('ko-KR');
-      return `${base} | DPM ${dmgPm} | CS ${avgCs} | 골드 ${avgGold}`;
-    }
-    case 'UTILITY': {
-      const avgVision = (stat.totalVision / stat.games).toFixed(1);
-      const avgWards = (stat.totalWards / stat.games).toFixed(1);
-      const avgCc = Math.round(stat.totalCcTime / stat.games);
-      return `${base} | 시야 ${avgVision} | 와드 ${avgWards}개 | CC ${avgCc}초`;
-    }
+    case 'TOP':
+      return [
+        ...base,
+        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
+        {
+          header: '탱킹/분',
+          width: 7,
+          value: (s) => dpm(s.totalDamageTaken, s.totalGameDurationSecs),
+        },
+        { header: '솔킬', width: 4, value: (s) => `${s.totalSoloKills}` },
+      ];
+    case 'JUNGLE':
+      return [
+        ...base,
+        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
+        { header: '오브젝트', width: 5, value: (s) => (s.totalDragonBaron / s.games).toFixed(1) },
+        { header: '적정글', width: 5, value: (s) => (s.totalEnemyJungle / s.games).toFixed(1) },
+        { header: 'CC', width: 4, value: (s) => `${Math.round(s.totalCcTime / s.games)}` },
+      ];
+    case 'MIDDLE':
+      return [
+        ...base,
+        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
+        { header: 'CS', width: 4, value: (s) => `${Math.round(s.totalCs / s.games)}` },
+        {
+          header: '골드',
+          width: 6,
+          value: (s) => Math.round(s.totalGold / s.games).toLocaleString('ko-KR'),
+        },
+        { header: '솔킬', width: 4, value: (s) => `${s.totalSoloKills}` },
+      ];
+    case 'BOTTOM':
+      return [
+        ...base,
+        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
+        { header: 'CS', width: 4, value: (s) => `${Math.round(s.totalCs / s.games)}` },
+        {
+          header: '골드',
+          width: 6,
+          value: (s) => Math.round(s.totalGold / s.games).toLocaleString('ko-KR'),
+        },
+      ];
+    case 'UTILITY':
+      return [
+        ...base,
+        { header: '시야', width: 5, value: (s) => (s.totalVision / s.games).toFixed(1) },
+        { header: '와드', width: 5, value: (s) => (s.totalWards / s.games).toFixed(1) },
+        { header: 'CC', width: 4, value: (s) => `${Math.round(s.totalCcTime / s.games)}` },
+      ];
   }
 }
 
+const NAME_WIDTH = 10;
+
+function buildTable(entries: [string, LaneStat][], position: Position, offset: number): string {
+  const columns = columnsFor(position);
+  const header =
+    pad('#', 3) + pad('이름', NAME_WIDTH) + columns.map((c) => pad(c.header, c.width)).join('');
+  const lines = entries.map(([name, stat], i) => {
+    const rank = offset + i + 1;
+    const rankStr = MEDALS[offset + i] ? MEDALS[offset + i] : `${rank}`;
+    return (
+      pad(rankStr, 3) +
+      pad(name, NAME_WIDTH) +
+      columns.map((c) => pad(c.value(stat), c.width)).join('')
+    );
+  });
+  return ['```', header, ...lines, '```'].join('\n');
+}
+
 function buildEmbed(
-  rows: string[],
+  entries: [string, LaneStat][],
   position: Position,
+  serverOnly: boolean,
+  offset: number,
   page: number,
   totalPages: number,
 ): EmbedBuilder {
   const meta = POSITION_META[position];
   return new EmbedBuilder()
     .setTitle(`${meta.icon} ${meta.name} 라인 랭킹`)
-    .setDescription(rows.join('\n'))
+    .setDescription(buildTable(entries, position, offset))
     .setColor(0x5865f2)
     .setFooter({
-      text: `${MIN_GAMES}판 이상 플레이 기준 · 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지`,
+      text: `${MIN_GAMES}판 이상 · ${serverOnly ? '서버 기반' : '전체 게임 기준'} · 판수 → 승률 → KDA 순 · ${page + 1}/${totalPages} 페이지`,
     })
     .setTimestamp();
 }
@@ -141,6 +213,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const position = interaction.options.getString('라인', true) as Position;
   const guildServerId = BigInt(interaction.guildId!);
 
+  const filterResult = readFilterOptions(interaction, { defaultServerOnly: true });
+  if (!filterResult.ok) {
+    await interaction.editReply(filterResult.error);
+    return;
+  }
+  const serverOnly = filterResult.opts.serverOnly ?? false;
+
   // 서버 등록 유저 목록
   const users = await prisma.user.findMany({
     where: {
@@ -164,9 +243,17 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
   const allAccountIds = [...accountIdToDiscord.keys()];
 
+  const allMatchIds = await getServerMatchIds(await getServerAccountIds(guildServerId));
+  const matchIds = await filterMatchIds(allMatchIds, allAccountIds, filterResult.opts);
+
+  if (matchIds.length === 0) {
+    await interaction.editReply('조건에 맞는 전적 데이터가 없습니다.');
+    return;
+  }
+
   // 해당 포지션 전체 매치 스탯 조회
   const matchStats = await prisma.playerMatchStat.findMany({
-    where: { lolAccountId: { in: allAccountIds }, position },
+    where: { lolAccountId: { in: allAccountIds }, matchId: { in: matchIds }, position },
     select: {
       lolAccountId: true,
       isWin: true,
@@ -236,10 +323,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     userStatMap.set(discordUserId, cur);
   }
 
-  // MIN_GAMES 이상 · 승률 → KDA 정렬
+  // MIN_GAMES 이상 · 판수 → 승률 → KDA 정렬
   const entries = [...userStatMap.entries()]
     .filter(([, s]) => s.games >= MIN_GAMES)
     .sort(([, a], [, b]) => {
+      if (b.games !== a.games) return b.games - a.games;
       const wrA = a.wins / a.games;
       const wrB = b.wins / b.games;
       if (wrB !== wrA) return wrB - wrA;
@@ -257,26 +345,25 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  // 행 생성
-  const allRows = await Promise.all(
-    entries.map(async ([discordUserId, stat], i) => {
-      const medal = MEDALS[i] ?? `**${i + 1}.**`;
-      let memberName: string;
+  // 표시 이름 resolve
+  const namedEntries: [string, LaneStat][] = await Promise.all(
+    entries.map(async ([discordUserId, stat]) => {
       try {
         const member = await interaction.guild!.members.fetch(discordUserId.toString());
-        memberName = member.displayName;
+        return [member.displayName, stat] as [string, LaneStat];
       } catch {
-        memberName = '어나니머스';
+        return ['어나니머스', stat] as [string, LaneStat];
       }
-      return `${medal} **${memberName}**　${formatStatLine(stat, position)}`;
     }),
   );
 
-  const totalPages = Math.ceil(allRows.length / PAGE_SIZE);
+  const totalPages = Math.ceil(namedEntries.length / PAGE_SIZE);
   let page = 0;
 
   const message = await interaction.editReply({
-    embeds: [buildEmbed(allRows.slice(0, PAGE_SIZE), position, page, totalPages)],
+    embeds: [
+      buildEmbed(namedEntries.slice(0, PAGE_SIZE), position, serverOnly, 0, page, totalPages),
+    ],
     components: totalPages > 1 ? [buildButtons(page, totalPages)] : [],
   });
 
@@ -295,11 +382,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       }
       if (btn.customId === 'lane_prev') page--;
       if (btn.customId === 'lane_next') page++;
+      const offset = page * PAGE_SIZE;
       await btn.update({
         embeds: [
           buildEmbed(
-            allRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+            namedEntries.slice(offset, offset + PAGE_SIZE),
             position,
+            serverOnly,
+            offset,
             page,
             totalPages,
           ),

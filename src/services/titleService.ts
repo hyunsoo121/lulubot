@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { filterMatchIds } from './matchFilter';
 
 export interface TitleInfo {
   code: string;
@@ -835,7 +836,9 @@ async function immortals(matchIds: bigint[], accountIds: bigint[]): Promise<Titl
 
 export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   const accountIds = await getServerAccountIds(guildServerId);
-  const matchIds = await getServerMatchIds(accountIds);
+  const allMatchIds = await getServerMatchIds(accountIds);
+  // 칭호는 무조건 서버 기반(매치 참가자 8명 이상이 서버 등록 계정)으로 계산
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, { serverOnly: true });
   if (matchIds.length === 0) return;
 
   const all = (field: string, agg: 'avg' | 'sum') =>
@@ -1053,7 +1056,9 @@ export async function getTitleRanking(
   titleCode: string,
 ): Promise<TitleRankRow[]> {
   const accountIds = await getServerAccountIds(guildServerId);
-  const matchIds = await getServerMatchIds(accountIds);
+  const allMatchIds = await getServerMatchIds(accountIds);
+  // 칭호순위도 무조건 서버 기반으로 계산 (recalculateTitles와 동일 기준)
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, { serverOnly: true });
   if (matchIds.length === 0) return [];
 
   const all = (field: string, agg: 'avg' | 'sum', where: Record<string, unknown> = {}) =>
