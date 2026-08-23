@@ -7,7 +7,7 @@ import {
 import { getAccountByDiscordId } from '../../../services/account';
 
 export const data = new SlashCommandBuilder()
-  .setName('유저정보')
+  .setName('유저계정정보')
   .setDescription('연결된 라이엇 계정을 확인합니다.')
   .addUserOption((option) =>
     option.setName('유저').setDescription('조회할 유저 (미입력 시 본인)').setRequired(false),

@@ -14,7 +14,7 @@ import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
   .setName('챔피언랭킹')
-  .setDescription('서버 내 특정 챔피언 랭킹을 조회합니다. (3판 이상 기준)')
+  .setDescription('서버 등록 계정의 챔피언별 랭킹을 조회합니다. (전체 게임 기준)')
   .addStringOption((option) =>
     option
       .setName('챔피언')
@@ -50,7 +50,7 @@ function buildEmbed(rows: string[], championName: string, page: number, totalPag
     .setTitle(`${championName} 랭킹`)
     .setDescription(rows.join('\n') || '데이터 없음')
     .setColor(0x5865f2)
-    .setFooter({ text: `3판 이상 기준 · 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지` })
+    .setFooter({ text: `판수 → 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지` })
     .setTimestamp();
 }
 
@@ -90,7 +90,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const ranking = await getChampionRanking(guildServerId, championId, filterResult.opts);
 
   if (ranking.length === 0) {
-    await interaction.editReply(`${championName} 랭킹 데이터가 없습니다. (3판 이상 플레이 필요)`);
+    await interaction.editReply(`${championName} 랭킹 데이터가 없습니다.`);
     return;
   }
 
