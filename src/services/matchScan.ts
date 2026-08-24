@@ -13,32 +13,18 @@ function scanCooldownKey(discordUserId: bigint) {
   return `scan:cooldown:${discordUserId}`;
 }
 
-/** 봇 재시작 시 중단된 스캔을 감지하고 해당 유저 데이터를 초기화 */
+/**
+ * 봇 재시작 시 중단된 스캔의 락을 정리.
+ * saveMatch가 매치 단위로 멱등적이고 통계 반영이 트랜잭션으로 원자적이므로
+ * 데이터를 지울 필요 없이 락만 해제하면 다음 갱신이 마지막 저장 지점부터 이어서 진행된다.
+ */
 export async function clearAllScanLocks(): Promise<void> {
   const keys = await redis.keys('scan:lock:*');
   if (keys.length === 0) return;
 
-  for (const key of keys) {
-    // scan:lock:{discordUserId} 에서 discordUserId 추출
-    const discordUserId = BigInt(key.replace('scan:lock:', ''));
-
-    // 중단된 스캔의 부분 저장 데이터를 제거 → 다음 스캔이 처음부터 시작
-    const user = await prisma.user.findUnique({
-      where: { discordUserId },
-      include: { lolAccounts: true },
-    });
-
-    if (user) {
-      const lolAccountIds = user.lolAccounts.map((a) => a.id);
-      await prisma.userGlobalStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
-      await prisma.playerMatchStat.deleteMany({ where: { lolAccountId: { in: lolAccountIds } } });
-      await prisma.matchRecord.deleteMany({ where: { playerStats: { none: {} } } });
-      console.log(
-        `[matchScan] 중단된 스캔 감지 (${discordUserId}) → 데이터 초기화, 다음 갱신 시 전체 재스캔`,
-      );
-    }
-  }
-
+  console.log(
+    `[matchScan] 중단된 스캔 감지 (${keys.length}건) → 락 해제, 다음 갱신 시 이어서 진행`,
+  );
   await redis.del(...keys);
 }
 
@@ -112,23 +98,6 @@ async function saveMatch(matchId: string): Promise<boolean> {
     match = await prisma.matchRecord.findUniqueOrThrow({ where: { matchId } });
   }
 
-  // 밴 데이터는 매치 전체 기준(참가자 개인 데이터가 아님) — 새로 생성된 매치일 때만 1회 저장
-  if (isNewMatch) {
-    const banInserts = info.teams.flatMap((t) =>
-      (t.bans ?? [])
-        .filter((b) => b.championId > 0) // 밴 안 한 슬롯은 championId: -1로 옴
-        .map((b) => ({
-          matchId: match.id,
-          team: (t.teamId === 100 ? 'BLUE' : 'RED') as 'BLUE' | 'RED',
-          championId: b.championId,
-          pickTurn: b.pickTurn,
-        })),
-    );
-    if (banInserts.length > 0) {
-      await prisma.championBan.createMany({ data: banInserts });
-    }
-  }
-
   // 이미 PlayerMatchStat이 있는 lolAccountId 조회
   const existingStats = await prisma.playerMatchStat.findMany({
     where: { matchId: match.id },
@@ -197,39 +166,60 @@ async function saveMatch(matchId: string): Promise<boolean> {
 
   if (statInserts.length === 0) return false;
 
-  await prisma.playerMatchStat.createMany({ data: statInserts });
-
-  // UserGlobalStat 업데이트 (새로 삽입된 유저만)
+  // 밴 데이터 + 참가자 스탯 + 전체 누적 스탯을 원자적으로 반영
+  // (도중에 실패해도 부분 반영이 남지 않으므로 재시작 시 데이터를 지울 필요가 없다)
   const newAccountIds = new Set(statInserts.map((s) => s.lolAccountId));
-  for (const p of info.participants) {
-    const account = accountMap.get(p.puuid);
-    if (!account || !newAccountIds.has(account.id)) continue;
+  await prisma.$transaction(async (tx) => {
+    // 밴 데이터는 매치 전체 기준(참가자 개인 데이터가 아님) — 새로 생성된 매치일 때만 1회 저장
+    if (isNewMatch) {
+      const banInserts = info.teams.flatMap((t) =>
+        (t.bans ?? [])
+          .filter((b) => b.championId > 0) // 밴 안 한 슬롯은 championId: -1로 옴
+          .map((b) => ({
+            matchId: match.id,
+            team: (t.teamId === 100 ? 'BLUE' : 'RED') as 'BLUE' | 'RED',
+            championId: b.championId,
+            pickTurn: b.pickTurn,
+          })),
+      );
+      if (banInserts.length > 0) {
+        await tx.championBan.createMany({ data: banInserts });
+      }
+    }
 
-    await prisma.userGlobalStat.upsert({
-      where: { lolAccountId: account.id },
-      create: {
-        lolAccountId: account.id,
-        totalGames: 1,
-        totalWins: p.win ? 1 : 0,
-        totalKills: p.kills,
-        totalDeaths: p.deaths,
-        totalAssists: p.assists,
-        totalDamage: p.totalDamageDealtToChampions,
-        totalVisionScore: p.visionScore,
-        pentaKillCount: p.pentaKills > 0 ? 1 : 0,
-      },
-      update: {
-        totalGames: { increment: 1 },
-        totalWins: { increment: p.win ? 1 : 0 },
-        totalKills: { increment: p.kills },
-        totalDeaths: { increment: p.deaths },
-        totalAssists: { increment: p.assists },
-        totalDamage: { increment: p.totalDamageDealtToChampions },
-        totalVisionScore: { increment: p.visionScore },
-        pentaKillCount: { increment: p.pentaKills > 0 ? 1 : 0 },
-      },
-    });
-  }
+    await tx.playerMatchStat.createMany({ data: statInserts });
+
+    // UserGlobalStat 업데이트 (새로 삽입된 유저만)
+    for (const p of info.participants) {
+      const account = accountMap.get(p.puuid);
+      if (!account || !newAccountIds.has(account.id)) continue;
+
+      await tx.userGlobalStat.upsert({
+        where: { lolAccountId: account.id },
+        create: {
+          lolAccountId: account.id,
+          totalGames: 1,
+          totalWins: p.win ? 1 : 0,
+          totalKills: p.kills,
+          totalDeaths: p.deaths,
+          totalAssists: p.assists,
+          totalDamage: p.totalDamageDealtToChampions,
+          totalVisionScore: p.visionScore,
+          pentaKillCount: p.pentaKills > 0 ? 1 : 0,
+        },
+        update: {
+          totalGames: { increment: 1 },
+          totalWins: { increment: p.win ? 1 : 0 },
+          totalKills: { increment: p.kills },
+          totalDeaths: { increment: p.deaths },
+          totalAssists: { increment: p.assists },
+          totalDamage: { increment: p.totalDamageDealtToChampions },
+          totalVisionScore: { increment: p.visionScore },
+          pentaKillCount: { increment: p.pentaKills > 0 ? 1 : 0 },
+        },
+      });
+    }
+  });
 
   return true;
 }
