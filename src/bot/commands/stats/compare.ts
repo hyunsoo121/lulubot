@@ -5,6 +5,7 @@ import {
   CompareStat,
   HeadToHeadStat,
 } from '../../../services/stats';
+import { resolveMatchup } from '../../../lib/matchupFormat';
 
 export const data = new SlashCommandBuilder()
   .setName('전적비교')
@@ -73,14 +74,13 @@ function headToHeadText(name1: string, name2: string, h2h: HeadToHeadStat): stri
   }
 
   if (h2h.againstGames > 0) {
-    const [leftName, leftWins, rightName, rightWins] =
-      h2h.user1Wins >= h2h.user2Wins
-        ? [name1, h2h.user1Wins, name2, h2h.user2Wins]
-        : [name2, h2h.user2Wins, name1, h2h.user1Wins];
-    const crown = leftWins > rightWins ? '👑 ' : '';
-    const wr = ((leftWins / h2h.againstGames) * 100).toFixed(1);
+    const { leftName, leftWins, rightName, rightWins, crown, winRatePct } = resolveMatchup(
+      { name: name1, wins: h2h.user1Wins },
+      { name: name2, wins: h2h.user2Wins },
+      h2h.againstGames,
+    );
     lines.push(
-      `상대팀(${h2h.againstGames}전): ${crown}${leftName} ${leftWins}승 · ${rightName} ${rightWins}승 (${wr}%)`,
+      `상대팀(${h2h.againstGames}전): ${crown}${leftName} ${leftWins}승 · ${rightName} ${rightWins}승 (${winRatePct}%)`,
     );
   }
 

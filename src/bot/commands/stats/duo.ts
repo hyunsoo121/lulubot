@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 import { getDuoRanking } from '../../../services/stats';
 import prisma from '../../../lib/prisma';
+import { resolveMatchup } from '../../../lib/matchupFormat';
 
 const PAGE_SIZE = 10;
 
@@ -58,17 +59,12 @@ function buildEmbed(
     if (sortType === 'against_wr') {
       // 상대팀(서로 다른 팀)일 땐 한쪽이 이기면 한쪽이 지므로, "승률" 하나만 보여주면
       // 누구 기준인지 알 수 없다 — 승수가 더 많은 쪽을 왼쪽에 두고 한 줄로 표시.
-      // 우위가 있으면 👑 표시(동률이면 표시 없음), %는 왼쪽(승수 많은 쪽) 기준 승률.
-      const name1Wins = row.againstWins;
-      const name2Wins = row.againstGames - row.againstWins;
-      const [leftName, leftWins, rightName, rightWins] =
-        name1Wins >= name2Wins
-          ? [row.name1, name1Wins, row.name2, name2Wins]
-          : [row.name2, name2Wins, row.name1, name1Wins];
-      const crown = leftWins > rightWins ? '👑 ' : '';
-      const winRate =
-        row.againstGames > 0 ? ((leftWins / row.againstGames) * 100).toFixed(1) : '0.0';
-      const header = `**${rank}.** ${crown}${leftName} & ${rightName} (${winRate}%)`;
+      const { leftName, leftWins, rightName, rightWins, crown, winRatePct } = resolveMatchup(
+        { name: row.name1, wins: row.againstWins },
+        { name: row.name2, wins: row.againstGames - row.againstWins },
+        row.againstGames,
+      );
+      const header = `**${rank}.** ${crown}${leftName} & ${rightName} (${winRatePct}%)`;
       return (
         `${header}\n　상대팀(${row.againstGames}전): ` +
         `${leftName} ${leftWins}승 · ${rightName} ${rightWins}승`

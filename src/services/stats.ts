@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma';
 import { getServerAccountIds, getServerMatchIds } from './titleService';
 import { filterMatchIds, MatchFilterOptions } from './matchFilter';
+import { getAccountByDiscordId } from './account';
 
 export interface AggregatedStat {
   totalGames: number;
@@ -183,38 +184,37 @@ export interface DuoRankRow {
   againstWins: number;
 }
 
-/** 서버 등록 계정끼리의 듀오(같은팀/상대팀) 전적을 실시간 집계 (id가 더 작은 쪽이 lolAccountId1 기준) */
-export async function getDuoRanking(
-  guildServerId: bigint,
-  filterOpts: MatchFilterOptions = {},
-): Promise<DuoRankRow[]> {
-  const accountIds = await getServerAccountIds(guildServerId);
-  if (accountIds.length === 0) return [];
+interface MatchParticipantRow {
+  matchId: bigint;
+  lolAccountId: bigint;
+  team: string;
+  isWin: boolean;
+}
 
-  const allMatchIds = await getServerMatchIds(accountIds);
-  const matchIds = await filterMatchIds(allMatchIds, accountIds, filterOpts);
-  if (matchIds.length === 0) return [];
-
-  const rows = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
-    select: { matchId: true, lolAccountId: true, team: true, isWin: true },
-  });
-
-  const byMatch = new Map<string, typeof rows>();
+function groupByMatch<T extends { matchId: bigint }>(rows: T[]): Map<string, T[]> {
+  const byMatch = new Map<string, T[]>();
   for (const r of rows) {
     const key = r.matchId.toString();
     const arr = byMatch.get(key) ?? [];
     arr.push(r);
     byMatch.set(key, arr);
   }
+  return byMatch;
+}
 
-  type DuoAgg = {
-    sameTeamGames: number;
-    sameTeamWins: number;
-    againstGames: number;
-    againstWins: number;
-  };
-  const pairMap = new Map<string, DuoAgg>();
+type PairAgg = {
+  sameTeamGames: number;
+  sameTeamWins: number;
+  againstGames: number;
+  againstWins: number;
+};
+
+/**
+ * 매치별로 그룹된 참가자들을 계정 쌍(id가 더 작은 쪽이 첫 번째)으로 묶어
+ * 같은팀/상대팀 판수·승수를 집계. againstWins는 쌍의 첫 번째 계정 기준 승수.
+ */
+function tallyPairs(byMatch: Map<string, MatchParticipantRow[]>): Map<string, PairAgg> {
+  const pairMap = new Map<string, PairAgg>();
 
   for (const participants of byMatch.values()) {
     const sorted = [...participants].sort((a, b) => (a.lolAccountId < b.lolAccountId ? -1 : 1));
@@ -242,9 +242,31 @@ export async function getDuoRanking(
     }
   }
 
-  return [...pairMap.entries()].map(([key, agg2]) => {
+  return pairMap;
+}
+
+/** 서버 등록 계정끼리의 듀오(같은팀/상대팀) 전적을 실시간 집계 (id가 더 작은 쪽이 lolAccountId1 기준) */
+export async function getDuoRanking(
+  guildServerId: bigint,
+  filterOpts: MatchFilterOptions = {},
+): Promise<DuoRankRow[]> {
+  const accountIds = await getServerAccountIds(guildServerId);
+  if (accountIds.length === 0) return [];
+
+  const allMatchIds = await getServerMatchIds(accountIds);
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, filterOpts);
+  if (matchIds.length === 0) return [];
+
+  const rows = await prisma.playerMatchStat.findMany({
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
+    select: { matchId: true, lolAccountId: true, team: true, isWin: true },
+  });
+
+  const pairMap = tallyPairs(groupByMatch(rows));
+
+  return [...pairMap.entries()].map(([key, agg]) => {
     const [id1, id2] = key.split(':').map(BigInt);
-    return { lolAccountId1: id1, lolAccountId2: id2, ...agg2 };
+    return { lolAccountId1: id1, lolAccountId2: id2, ...agg };
   });
 }
 
@@ -473,7 +495,10 @@ const EMPTY_HEAD_TO_HEAD: HeadToHeadStat = {
   user2Wins: 0,
 };
 
-/** 두 유저의 상대전적(같은팀/맞대결) — 서버 기준, 멀티계정(스마프) 합산 */
+/**
+ * 두 유저의 상대전적(같은팀/맞대결) — 서버 기준, 멀티계정(스마프) 합산.
+ * getDuoRanking과 동일한 계정 쌍 집계(tallyPairs)를 재사용해 로직이 갈리지 않도록 한다.
+ */
 export async function getHeadToHead(
   guildServerId: bigint,
   discordUserId1: bigint,
@@ -483,20 +508,14 @@ export async function getHeadToHead(
   const accountIds = await getServerAccountIds(guildServerId);
   if (accountIds.length === 0) return EMPTY_HEAD_TO_HEAD;
 
-  const [user1, user2] = await Promise.all([
-    prisma.user.findUnique({
-      where: { discordUserId: discordUserId1 },
-      include: { lolAccounts: true },
-    }),
-    prisma.user.findUnique({
-      where: { discordUserId: discordUserId2 },
-      include: { lolAccounts: true },
-    }),
+  const [accounts1, accounts2] = await Promise.all([
+    getAccountByDiscordId(discordUserId1),
+    getAccountByDiscordId(discordUserId2),
   ]);
-  if (!user1 || !user2) return EMPTY_HEAD_TO_HEAD;
 
-  const accountIds1 = new Set(user1.lolAccounts.map((a) => a.id));
-  const accountIds2 = new Set(user2.lolAccounts.map((a) => a.id));
+  // 이 서버에 등록된 계정만 카운트 (다른 서버에만 연결된 계정 제외)
+  const accountIds1 = new Set(accounts1.map((a) => a.id).filter((id) => accountIds.includes(id)));
+  const accountIds2 = new Set(accounts2.map((a) => a.id).filter((id) => accountIds.includes(id)));
   if (accountIds1.size === 0 || accountIds2.size === 0) return EMPTY_HEAD_TO_HEAD;
 
   const allMatchIds = await getServerMatchIds(accountIds);
@@ -511,27 +530,33 @@ export async function getHeadToHead(
     select: { matchId: true, lolAccountId: true, team: true, isWin: true },
   });
 
-  const byMatch = new Map<string, typeof rows>();
-  for (const r of rows) {
-    const key = r.matchId.toString();
-    const arr = byMatch.get(key) ?? [];
-    arr.push(r);
-    byMatch.set(key, arr);
-  }
+  const pairMap = tallyPairs(groupByMatch(rows));
 
   const result = { ...EMPTY_HEAD_TO_HEAD };
-  for (const participants of byMatch.values()) {
-    const p1 = participants.find((p) => accountIds1.has(p.lolAccountId));
-    const p2 = participants.find((p) => accountIds2.has(p.lolAccountId));
-    if (!p1 || !p2) continue;
+  for (const [key, agg] of pairMap) {
+    const [idA, idB] = key.split(':').map(BigInt);
+    const aIn1 = accountIds1.has(idA);
+    const aIn2 = accountIds2.has(idA);
+    const bIn1 = accountIds1.has(idB);
+    const bIn2 = accountIds2.has(idB);
 
-    if (p1.team === p2.team) {
-      result.sameTeamGames++;
-      if (p1.isWin) result.sameTeamWins++;
+    // 한쪽 계정은 user1, 다른 쪽은 user2 소속인 쌍만 상대전적으로 카운트
+    // (둘 다 같은 유저의 스마프 쌍이면 상대전적이 아니므로 제외)
+    let user1IsA: boolean;
+    if (aIn1 && bIn2) user1IsA = true;
+    else if (aIn2 && bIn1) user1IsA = false;
+    else continue;
+
+    result.sameTeamGames += agg.sameTeamGames;
+    result.sameTeamWins += agg.sameTeamWins;
+    result.againstGames += agg.againstGames;
+    // agg.againstWins는 항상 idA(쌍의 첫 번째 계정) 기준 승수
+    if (user1IsA) {
+      result.user1Wins += agg.againstWins;
+      result.user2Wins += agg.againstGames - agg.againstWins;
     } else {
-      result.againstGames++;
-      if (p1.isWin) result.user1Wins++;
-      else result.user2Wins++;
+      result.user2Wins += agg.againstWins;
+      result.user1Wins += agg.againstGames - agg.againstWins;
     }
   }
 

@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import prisma from '../../../lib/prisma';
 import { getAccountByDiscordId } from '../../../services/account';
+import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('계정삭제')
@@ -65,6 +66,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         where: { userId: user.id, guildServerId },
       });
     }
+  }
+
+  // 삭제한 계정이 보유하던 칭호가 남지 않도록 재계산
+  if (guildServerId) {
+    await recalculateTitles(guildServerId).catch((e) =>
+      console.error('[계정삭제] 칭호 재계산 실패:', e),
+    );
   }
 
   await interaction.editReply(

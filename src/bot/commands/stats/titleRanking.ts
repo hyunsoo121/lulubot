@@ -69,7 +69,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
   const titleCode = interaction.options.getString('칭호', true);
-  const def = TITLE_DEFINITIONS[titleCode];
+  // 자동완성 없이 자유 입력이 가능하므로 Object.prototype 상속 멤버(toString 등)와
+  // 매칭되지 않도록 실제 소유 프로퍼티인지 먼저 확인
+  const def = Object.hasOwn(TITLE_DEFINITIONS, titleCode)
+    ? TITLE_DEFINITIONS[titleCode]
+    : undefined;
 
   if (!def) {
     await interaction.editReply('존재하지 않는 칭호입니다.');
