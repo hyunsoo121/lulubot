@@ -1,6 +1,8 @@
 import prisma from '../lib/prisma';
 import { getAccountByRiotId } from './riot';
 
+const MAX_ACCOUNTS_PER_USER = 5;
+
 export async function registerAccount(
   discordUserId: bigint,
   gameName: string,
@@ -45,6 +47,15 @@ export async function registerAccount(
     update: {},
     create: { discordUserId },
   });
+
+  // 여기까지 왔다는 건 이 유저에게 새로 계정을 연결하는 경우(신규 또는 예전에 해제했던 계정 재연결)
+  // — 이미 갖고 있는 계정을 다른 서버에 추가 연결하는 경우는 위에서 먼저 걸러져서 여기 안 옴
+  const accountCount = await prisma.lolAccount.count({ where: { userId: user.id } });
+  if (accountCount >= MAX_ACCOUNTS_PER_USER) {
+    throw new Error(
+      `계정은 최대 ${MAX_ACCOUNTS_PER_USER}개까지 등록할 수 있습니다. \`/계정삭제\`로 기존 계정을 먼저 해제해주세요.`,
+    );
+  }
 
   // LolAccount upsert (puuid 기준)
   const lolAccount = await prisma.lolAccount.upsert({

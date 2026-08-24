@@ -59,11 +59,31 @@ function buildButtons(page: number, totalPages: number) {
 export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
-  const championIdStr = interaction.options.getString('챔피언', true);
-  const championId = Number(championIdStr);
+  const raw = interaction.options.getString('챔피언', true).trim();
+  let championId = Number(raw);
+
+  // 자동완성에서 고르지 않고 이름을 직접 입력한 경우 — 이름으로 찾아본다
   if (!Number.isInteger(championId)) {
-    await interaction.editReply('❌ 챔피언을 자동완성 목록에서 선택해주세요.');
-    return;
+    const champions = await getAllChampions();
+    const exact = champions.find((c) => c.name === raw);
+    if (exact) {
+      championId = exact.id;
+    } else {
+      const matches = champions.filter((c) => c.name.includes(raw));
+      if (matches.length === 1) {
+        championId = matches[0].id;
+      } else if (matches.length > 1) {
+        await interaction.editReply(
+          `❌ "${raw}"에 해당하는 챔피언이 여러 개입니다: ${matches.map((c) => c.name).join(', ')}\n정확한 이름을 입력하거나 자동완성 목록에서 선택해주세요.`,
+        );
+        return;
+      } else {
+        await interaction.editReply(
+          '❌ 해당하는 챔피언을 찾을 수 없습니다. 자동완성 목록에서 선택하거나 정확한 이름을 입력해주세요.',
+        );
+        return;
+      }
+    }
   }
 
   const guildServerId = BigInt(interaction.guildId!);

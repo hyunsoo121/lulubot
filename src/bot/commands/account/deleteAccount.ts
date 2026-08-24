@@ -17,6 +17,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const input = interaction.options.getString('닉네임태그', true);
   const [gameName, tagLine] = input.split('#');
 
+  if (target.id !== interaction.user.id && !interaction.memberPermissions?.has('Administrator')) {
+    await interaction.editReply('❌ 다른 멤버의 계정 삭제는 관리자만 할 수 있습니다.');
+    return;
+  }
+
   if (!gameName || !tagLine) {
     await interaction.editReply('올바른 형식으로 입력해주세요. 예) 롤닉#KR1');
     return;
