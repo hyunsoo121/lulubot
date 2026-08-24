@@ -361,8 +361,16 @@ export interface CompareStat {
   deaths: number;
   assists: number;
   totalDamage: number;
+  totalDamageTaken: number;
   totalGold: number;
+  totalCs: number;
   totalVisionScore: number;
+  totalWardsPlaced: number;
+  totalControlWardsPlaced: number;
+  totalKillParticipation: number;
+  totalTurretKills: number;
+  totalSoloKills: number;
+  totalPentaKills: number;
 }
 
 const EMPTY_COMPARE_STAT: CompareStat = {
@@ -372,8 +380,16 @@ const EMPTY_COMPARE_STAT: CompareStat = {
   deaths: 0,
   assists: 0,
   totalDamage: 0,
+  totalDamageTaken: 0,
   totalGold: 0,
+  totalCs: 0,
   totalVisionScore: 0,
+  totalWardsPlaced: 0,
+  totalControlWardsPlaced: 0,
+  totalKillParticipation: 0,
+  totalTurretKills: 0,
+  totalSoloKills: 0,
+  totalPentaKills: 0,
 };
 
 /** 서버 기준으로 한 유저의 집계 전적을 반환 (필터 옵션 적용, 등록 안 됐으면 null) */
@@ -405,8 +421,16 @@ export async function getComparisonStat(
       deaths: true,
       assists: true,
       damageDealt: true,
+      damageTaken: true,
       goldEarned: true,
+      cs: true,
       visionScore: true,
+      wardsPlaced: true,
+      controlWardsPlaced: true,
+      killParticipation: true,
+      turretKills: true,
+      soloKills: true,
+      pentaKills: true,
     },
   });
 
@@ -418,11 +442,100 @@ export async function getComparisonStat(
       deaths: acc.deaths + s.deaths,
       assists: acc.assists + s.assists,
       totalDamage: acc.totalDamage + s.damageDealt,
+      totalDamageTaken: acc.totalDamageTaken + s.damageTaken,
       totalGold: acc.totalGold + s.goldEarned,
+      totalCs: acc.totalCs + s.cs,
       totalVisionScore: acc.totalVisionScore + s.visionScore,
+      totalWardsPlaced: acc.totalWardsPlaced + s.wardsPlaced,
+      totalControlWardsPlaced: acc.totalControlWardsPlaced + s.controlWardsPlaced,
+      totalKillParticipation: acc.totalKillParticipation + s.killParticipation,
+      totalTurretKills: acc.totalTurretKills + s.turretKills,
+      totalSoloKills: acc.totalSoloKills + s.soloKills,
+      totalPentaKills: acc.totalPentaKills + s.pentaKills,
     }),
     { ...EMPTY_COMPARE_STAT },
   );
+}
+
+export interface HeadToHeadStat {
+  sameTeamGames: number;
+  sameTeamWins: number;
+  againstGames: number;
+  user1Wins: number;
+  user2Wins: number;
+}
+
+const EMPTY_HEAD_TO_HEAD: HeadToHeadStat = {
+  sameTeamGames: 0,
+  sameTeamWins: 0,
+  againstGames: 0,
+  user1Wins: 0,
+  user2Wins: 0,
+};
+
+/** 두 유저의 상대전적(같은팀/맞대결) — 서버 기준, 멀티계정(스마프) 합산 */
+export async function getHeadToHead(
+  guildServerId: bigint,
+  discordUserId1: bigint,
+  discordUserId2: bigint,
+  filterOpts: MatchFilterOptions = {},
+): Promise<HeadToHeadStat> {
+  const accountIds = await getServerAccountIds(guildServerId);
+  if (accountIds.length === 0) return EMPTY_HEAD_TO_HEAD;
+
+  const [user1, user2] = await Promise.all([
+    prisma.user.findUnique({
+      where: { discordUserId: discordUserId1 },
+      include: { lolAccounts: true },
+    }),
+    prisma.user.findUnique({
+      where: { discordUserId: discordUserId2 },
+      include: { lolAccounts: true },
+    }),
+  ]);
+  if (!user1 || !user2) return EMPTY_HEAD_TO_HEAD;
+
+  const accountIds1 = new Set(user1.lolAccounts.map((a) => a.id));
+  const accountIds2 = new Set(user2.lolAccounts.map((a) => a.id));
+  if (accountIds1.size === 0 || accountIds2.size === 0) return EMPTY_HEAD_TO_HEAD;
+
+  const allMatchIds = await getServerMatchIds(accountIds);
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, filterOpts);
+  if (matchIds.length === 0) return EMPTY_HEAD_TO_HEAD;
+
+  const rows = await prisma.playerMatchStat.findMany({
+    where: {
+      matchId: { in: matchIds },
+      lolAccountId: { in: [...accountIds1, ...accountIds2] },
+    },
+    select: { matchId: true, lolAccountId: true, team: true, isWin: true },
+  });
+
+  const byMatch = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = r.matchId.toString();
+    const arr = byMatch.get(key) ?? [];
+    arr.push(r);
+    byMatch.set(key, arr);
+  }
+
+  const result = { ...EMPTY_HEAD_TO_HEAD };
+  for (const participants of byMatch.values()) {
+    const p1 = participants.find((p) => accountIds1.has(p.lolAccountId));
+    const p2 = participants.find((p) => accountIds2.has(p.lolAccountId));
+    if (!p1 || !p2) continue;
+
+    if (p1.team === p2.team) {
+      result.sameTeamGames++;
+      if (p1.isWin) result.sameTeamWins++;
+    } else {
+      result.againstGames++;
+      if (p1.isWin) result.user1Wins++;
+      else result.user2Wins++;
+    }
+  }
+
+  return result;
 }
 
 export async function getRecentMatchByDiscordId(discordUserId: bigint) {
