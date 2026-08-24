@@ -20,6 +20,7 @@ import * as titles from './stats/titles';
 import * as laneRanking from './stats/laneRanking';
 import * as titleRanking from './stats/titleRanking';
 import * as championRanking from './stats/championRanking';
+import * as banPickRate from './stats/banPickRate';
 import * as compare from './stats/compare';
 import * as duo from './stats/duo';
 import * as deleteAccount from './account/deleteAccount';
@@ -48,6 +49,7 @@ const commandList: Command[] = [
   laneRanking,
   titleRanking,
   championRanking,
+  banPickRate,
   compare,
   duo,
   deleteAccount,

@@ -452,3 +452,88 @@ export async function getRecentMatchByDiscordId(discordUserId: bigint) {
 
   return stat;
 }
+
+export interface BanPickRow {
+  championId: number;
+  banCount: number;
+  banRate: number;
+  pickCount: number;
+  pickRate: number;
+  wins: number;
+  winRate: number | null; // 픽된 적 없으면(밴만 당함) null
+  contestRate: number; // 밴률 + 픽률
+}
+
+export interface BanPickStats {
+  totalMatches: number;
+  totalMatchesWithBanData: number;
+  rows: BanPickRow[];
+}
+
+/**
+ * 서버 기반(참가자 8명 이상) 매치 기준 챔피언별 밴픽률(밴률+픽률) · 밴률 · 픽률 · 승률.
+ * 밴 데이터는 이 기능 도입 이후 새로 스캔된 매치에만 있으므로,
+ * 밴률의 분모는 "밴 데이터가 있는 매치 수"로 픽률의 분모(전체 스코프 매치 수)와 다르게 계산한다.
+ * 밴픽률(contestRate)은 두 비율을 그대로 합산하는 통상적인 방식(op.gg 등)을 따른다.
+ */
+export async function getBanPickStats(guildServerId: bigint): Promise<BanPickStats> {
+  const empty: BanPickStats = { totalMatches: 0, totalMatchesWithBanData: 0, rows: [] };
+
+  const accountIds = await getServerAccountIds(guildServerId);
+  if (accountIds.length === 0) return empty;
+
+  const allMatchIds = await getServerMatchIds(accountIds);
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, { serverOnly: true });
+  if (matchIds.length === 0) return empty;
+
+  const pickRows = await prisma.playerMatchStat.groupBy({
+    by: ['championId'],
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
+    _count: { id: true },
+  });
+
+  const winRows = await prisma.playerMatchStat.groupBy({
+    by: ['championId'],
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, isWin: true },
+    _count: { id: true },
+  });
+
+  const banRows = await prisma.championBan.groupBy({
+    by: ['championId'],
+    where: { matchId: { in: matchIds } },
+    _count: { id: true },
+  });
+
+  const banMatchRows = await prisma.championBan.groupBy({
+    by: ['matchId'],
+    where: { matchId: { in: matchIds } },
+  });
+  const totalMatchesWithBanData = banMatchRows.length;
+
+  const pickMap = new Map(pickRows.map((r) => [r.championId, r._count.id]));
+  const winMap = new Map(winRows.map((r) => [r.championId, r._count.id]));
+  const banMap = new Map(banRows.map((r) => [r.championId, r._count.id]));
+  const championIds = new Set([...pickMap.keys(), ...banMap.keys()]);
+
+  const rows: BanPickRow[] = [...championIds].map((championId) => {
+    const pickCount = pickMap.get(championId) ?? 0;
+    const banCount = banMap.get(championId) ?? 0;
+    const wins = winMap.get(championId) ?? 0;
+    const pickRate = pickCount / matchIds.length;
+    const banRate = totalMatchesWithBanData > 0 ? banCount / totalMatchesWithBanData : 0;
+    return {
+      championId,
+      banCount,
+      banRate,
+      pickCount,
+      pickRate,
+      wins,
+      winRate: pickCount > 0 ? wins / pickCount : null,
+      contestRate: banRate + pickRate,
+    };
+  });
+
+  rows.sort((a, b) => b.contestRate - a.contestRate);
+
+  return { totalMatches: matchIds.length, totalMatchesWithBanData, rows };
+}

@@ -38,12 +38,17 @@ export interface RiotMatchParticipant {
   };
 }
 
+export interface RiotMatchBan {
+  championId: number;
+  pickTurn: number;
+}
+
 export interface RiotMatchInfo {
   gameId: number;
   gameType: string;
   gameDuration: number;
   gameCreation: number;
-  teams: { teamId: number; win: boolean }[];
+  teams: { teamId: number; win: boolean; bans: RiotMatchBan[] }[];
   participants: RiotMatchParticipant[];
 }
 

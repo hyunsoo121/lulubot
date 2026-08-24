@@ -84,10 +84,23 @@ model MatchRecord {
   gameDurationSecs Int       @map("game_duration_secs")
   playedAt         DateTime  @map("played_at")
 
-  guildServer GuildServer?      @relation(fields: [guildServerId], references: [id])
-  playerStats PlayerMatchStat[]
+  guildServer  GuildServer?      @relation(fields: [guildServerId], references: [id])
+  playerStats  PlayerMatchStat[]
+  championBans ChampionBan[]
 
   @@map("match_record")
+}
+
+model ChampionBan {
+  id         BigInt @id @default(autoincrement())
+  matchId    BigInt @map("match_id")
+  team       Team
+  championId Int    @map("champion_id")
+  pickTurn   Int    @map("pick_turn")
+
+  matchRecord MatchRecord @relation(fields: [matchId], references: [id])
+
+  @@map("champion_ban")
 }
 
 model PlayerMatchStat {

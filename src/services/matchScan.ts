@@ -93,18 +93,41 @@ async function saveMatch(matchId: string): Promise<boolean> {
   const accounts = await prisma.lolAccount.findMany({ where: { puuid: { in: puuids } } });
   const accountMap = new Map(accounts.map((a) => [a.puuid, a]));
 
-  // MatchRecord upsert (다른 유저가 이미 저장했을 수 있음)
-  const match = await prisma.matchRecord.upsert({
-    where: { matchId },
-    update: {},
-    create: {
-      matchId,
-      guildServerId: null, // 개인 PUUID 스캔 매치는 특정 서버에 귀속되지 않음 (전체 커스텀 게임 추적 철학)
-      winnerTeam: winnerTeam as 'BLUE' | 'RED',
-      gameDurationSecs: info.gameDuration,
-      playedAt: new Date(info.gameCreation),
-    },
-  });
+  // MatchRecord 생성 시도 — 다른 유저가 이미 저장했을 수 있으므로 유니크 제약 충돌은 조회로 대체
+  // (upsert 대신 create를 써서 "이번에 새로 생성됐는지"를 알 수 있어야 밴 데이터를 중복 없이 넣을 수 있음)
+  let match;
+  let isNewMatch = false;
+  try {
+    match = await prisma.matchRecord.create({
+      data: {
+        matchId,
+        guildServerId: null, // 개인 PUUID 스캔 매치는 특정 서버에 귀속되지 않음 (전체 커스텀 게임 추적 철학)
+        winnerTeam: winnerTeam as 'BLUE' | 'RED',
+        gameDurationSecs: info.gameDuration,
+        playedAt: new Date(info.gameCreation),
+      },
+    });
+    isNewMatch = true;
+  } catch {
+    match = await prisma.matchRecord.findUniqueOrThrow({ where: { matchId } });
+  }
+
+  // 밴 데이터는 매치 전체 기준(참가자 개인 데이터가 아님) — 새로 생성된 매치일 때만 1회 저장
+  if (isNewMatch) {
+    const banInserts = info.teams.flatMap((t) =>
+      (t.bans ?? [])
+        .filter((b) => b.championId > 0) // 밴 안 한 슬롯은 championId: -1로 옴
+        .map((b) => ({
+          matchId: match.id,
+          team: (t.teamId === 100 ? 'BLUE' : 'RED') as 'BLUE' | 'RED',
+          championId: b.championId,
+          pickTurn: b.pickTurn,
+        })),
+    );
+    if (banInserts.length > 0) {
+      await prisma.championBan.createMany({ data: banInserts });
+    }
+  }
 
   // 이미 PlayerMatchStat이 있는 lolAccountId 조회
   const existingStats = await prisma.playerMatchStat.findMany({

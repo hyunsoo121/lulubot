@@ -27,7 +27,6 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
-const MEDALS = ['🥇', '🥈', '🥉'];
 const MIN_GAMES = 3;
 const PAGE_SIZE = 10;
 
@@ -65,129 +64,49 @@ function dpm(totalDamage: number, totalSecs: number): string {
   return Math.round(totalDamage / (totalSecs / 60)).toLocaleString('ko-KR');
 }
 
-// 디스코드 코드블록 모노스페이스 폰트에서 한글/이모지는 라틴 문자의 2배 폭을 차지한다.
-// .length(코드 유닛 개수) 기준으로 패딩하면 한글이 섞인 행마다 정렬이 어긋나므로
-// 유니코드 코드포인트 단위로 순회하며 실제 표시 폭을 계산해서 패딩한다.
-function charWidth(codePoint: number): number {
-  if (
-    (codePoint >= 0x1100 && codePoint <= 0x115f) || // 한글 자모
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) || // CJK 부수 ~ Yi
-    (codePoint >= 0xac00 && codePoint <= 0xd7a3) || // 한글 음절
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // CJK 호환 한자
-    (codePoint >= 0xff00 && codePoint <= 0xff60) || // 전각 형태
-    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
-    (codePoint >= 0x2600 && codePoint <= 0x27bf) || // 기타 심볼/이모지
-    (codePoint >= 0x1f300 && codePoint <= 0x1faff) // 이모지 대부분
-  ) {
-    return 2;
-  }
-  return 1;
-}
+function formatLine(rank: number, name: string, stat: LaneStat, position: Position): string {
+  const wr = ((stat.wins / stat.games) * 100).toFixed(1);
+  const kda = ((stat.kills + stat.assists) / Math.max(stat.deaths, 1)).toFixed(2);
+  const kp = ((stat.totalKillParticipation / stat.games) * 100).toFixed(0);
+  const dmgPm = dpm(stat.totalDamage, stat.totalGameDurationSecs);
+  const base = `${stat.games}판 ${wr}% KDA ${kda} 킬관여 ${kp}%`;
 
-/** 표시 폭 기준으로 자르고(넘치면) 오른쪽을 공백으로 채운다 */
-function padVisual(s: string, targetWidth: number): string {
-  let width = 0;
-  let truncated = '';
-  for (const ch of s) {
-    const w = charWidth(ch.codePointAt(0)!);
-    if (width + w > targetWidth) break;
-    truncated += ch;
-    width += w;
-  }
-  return truncated + ' '.repeat(Math.max(0, targetWidth - width));
-}
-
-/** 포지션별 표 컬럼 정의: [헤더, 너비(표시폭 기준), 값추출함수] */
-function columnsFor(
-  position: Position,
-): { header: string; width: number; value: (s: LaneStat) => string }[] {
-  const base: { header: string; width: number; value: (s: LaneStat) => string }[] = [
-    { header: '판수', width: 4, value: (s) => `${s.games}` },
-    { header: '승률', width: 4, value: (s) => `${((s.wins / s.games) * 100).toFixed(0)}%` },
-    {
-      header: 'KDA',
-      width: 5,
-      value: (s) => ((s.kills + s.assists) / Math.max(s.deaths, 1)).toFixed(2),
-    },
-    {
-      header: '킬관여',
-      width: 6,
-      value: (s) => `${((s.totalKillParticipation / s.games) * 100).toFixed(0)}%`,
-    },
-  ];
-
+  let extra: string;
   switch (position) {
-    case 'TOP':
-      return [
-        ...base,
-        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
-        {
-          header: '탱킹/분',
-          width: 7,
-          value: (s) => dpm(s.totalDamageTaken, s.totalGameDurationSecs),
-        },
-        { header: '솔킬', width: 4, value: (s) => `${s.totalSoloKills}` },
-      ];
-    case 'JUNGLE':
-      return [
-        ...base,
-        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
-        { header: '오브젝트', width: 8, value: (s) => (s.totalDragonBaron / s.games).toFixed(1) },
-        { header: '적정글', width: 6, value: (s) => (s.totalEnemyJungle / s.games).toFixed(1) },
-        { header: 'CC', width: 4, value: (s) => `${Math.round(s.totalCcTime / s.games)}` },
-      ];
-    case 'MIDDLE':
-      return [
-        ...base,
-        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
-        { header: 'CS', width: 4, value: (s) => `${Math.round(s.totalCs / s.games)}` },
-        {
-          header: '골드',
-          width: 6,
-          value: (s) => Math.round(s.totalGold / s.games).toLocaleString('ko-KR'),
-        },
-        { header: '솔킬', width: 4, value: (s) => `${s.totalSoloKills}` },
-      ];
-    case 'BOTTOM':
-      return [
-        ...base,
-        { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
-        { header: 'CS', width: 4, value: (s) => `${Math.round(s.totalCs / s.games)}` },
-        {
-          header: '골드',
-          width: 6,
-          value: (s) => Math.round(s.totalGold / s.games).toLocaleString('ko-KR'),
-        },
-      ];
-    case 'UTILITY':
-      return [
-        ...base,
-        { header: '시야', width: 5, value: (s) => (s.totalVision / s.games).toFixed(1) },
-        { header: '와드', width: 5, value: (s) => (s.totalWards / s.games).toFixed(1) },
-        { header: 'CC', width: 4, value: (s) => `${Math.round(s.totalCcTime / s.games)}` },
-      ];
+    case 'TOP': {
+      const tankPm = dpm(stat.totalDamageTaken, stat.totalGameDurationSecs);
+      extra = `DPM ${dmgPm} | 탱킹/분 ${tankPm} | 솔로킬 ${stat.totalSoloKills}회`;
+      break;
+    }
+    case 'JUNGLE': {
+      const avgObj = (stat.totalDragonBaron / stat.games).toFixed(1);
+      const avgSteal = (stat.totalEnemyJungle / stat.games).toFixed(1);
+      const avgCc = Math.round(stat.totalCcTime / stat.games);
+      extra = `DPM ${dmgPm} | 오브젝트 ${avgObj} | 적정글 ${avgSteal}개 | CC ${avgCc}초`;
+      break;
+    }
+    case 'MIDDLE': {
+      const avgCs = Math.round(stat.totalCs / stat.games);
+      const avgGold = Math.round(stat.totalGold / stat.games).toLocaleString('ko-KR');
+      extra = `DPM ${dmgPm} | CS ${avgCs} | 골드 ${avgGold} | 솔로킬 ${stat.totalSoloKills}회`;
+      break;
+    }
+    case 'BOTTOM': {
+      const avgCs = Math.round(stat.totalCs / stat.games);
+      const avgGold = Math.round(stat.totalGold / stat.games).toLocaleString('ko-KR');
+      extra = `DPM ${dmgPm} | CS ${avgCs} | 골드 ${avgGold}`;
+      break;
+    }
+    case 'UTILITY': {
+      const avgVision = (stat.totalVision / stat.games).toFixed(1);
+      const avgWards = (stat.totalWards / stat.games).toFixed(1);
+      const avgCc = Math.round(stat.totalCcTime / stat.games);
+      extra = `시야 ${avgVision} | 와드 ${avgWards}개 | CC ${avgCc}초`;
+      break;
+    }
   }
-}
 
-const NAME_WIDTH = 10;
-
-function buildTable(entries: [string, LaneStat][], position: Position, offset: number): string {
-  const columns = columnsFor(position);
-  const header = [
-    padVisual('#', 3),
-    padVisual('이름', NAME_WIDTH),
-    ...columns.map((c) => padVisual(c.header, c.width)),
-  ].join(' ');
-  const lines = entries.map(([name, stat], i) => {
-    const rank = offset + i + 1;
-    const rankStr = MEDALS[offset + i] ? MEDALS[offset + i] : `${rank}`;
-    return [
-      padVisual(rankStr, 3),
-      padVisual(name, NAME_WIDTH),
-      ...columns.map((c) => padVisual(c.value(stat), c.width)),
-    ].join(' ');
-  });
-  return ['```', header, ...lines, '```'].join('\n');
+  return `**${rank}. ${name}**　${base} | ${extra}`;
 }
 
 function buildEmbed(
@@ -198,9 +117,10 @@ function buildEmbed(
   totalPages: number,
 ): EmbedBuilder {
   const meta = POSITION_META[position];
+  const rows = entries.map(([name, stat], i) => formatLine(offset + i + 1, name, stat, position));
   return new EmbedBuilder()
     .setTitle(`${meta.icon} ${meta.name} 라인 랭킹`)
-    .setDescription(buildTable(entries, position, offset))
+    .setDescription(rows.join('\n'))
     .setColor(0x5865f2)
     .setFooter({
       text: `${MIN_GAMES}판 이상 · 서버 기반 · 판수 → 승률 → KDA 순 · ${page + 1}/${totalPages} 페이지`,
