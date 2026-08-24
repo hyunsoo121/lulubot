@@ -65,18 +65,45 @@ function dpm(totalDamage: number, totalSecs: number): string {
   return Math.round(totalDamage / (totalSecs / 60)).toLocaleString('ko-KR');
 }
 
-function pad(s: string, len: number): string {
-  if (s.length >= len) return s.slice(0, len);
-  return s + ' '.repeat(len - s.length);
+// 디스코드 코드블록 모노스페이스 폰트에서 한글/이모지는 라틴 문자의 2배 폭을 차지한다.
+// .length(코드 유닛 개수) 기준으로 패딩하면 한글이 섞인 행마다 정렬이 어긋나므로
+// 유니코드 코드포인트 단위로 순회하며 실제 표시 폭을 계산해서 패딩한다.
+function charWidth(codePoint: number): number {
+  if (
+    (codePoint >= 0x1100 && codePoint <= 0x115f) || // 한글 자모
+    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) || // CJK 부수 ~ Yi
+    (codePoint >= 0xac00 && codePoint <= 0xd7a3) || // 한글 음절
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // CJK 호환 한자
+    (codePoint >= 0xff00 && codePoint <= 0xff60) || // 전각 형태
+    (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
+    (codePoint >= 0x2600 && codePoint <= 0x27bf) || // 기타 심볼/이모지
+    (codePoint >= 0x1f300 && codePoint <= 0x1faff) // 이모지 대부분
+  ) {
+    return 2;
+  }
+  return 1;
 }
 
-/** 포지션별 표 컬럼 정의: [헤더, 너비, 값추출함수] */
+/** 표시 폭 기준으로 자르고(넘치면) 오른쪽을 공백으로 채운다 */
+function padVisual(s: string, targetWidth: number): string {
+  let width = 0;
+  let truncated = '';
+  for (const ch of s) {
+    const w = charWidth(ch.codePointAt(0)!);
+    if (width + w > targetWidth) break;
+    truncated += ch;
+    width += w;
+  }
+  return truncated + ' '.repeat(Math.max(0, targetWidth - width));
+}
+
+/** 포지션별 표 컬럼 정의: [헤더, 너비(표시폭 기준), 값추출함수] */
 function columnsFor(
   position: Position,
 ): { header: string; width: number; value: (s: LaneStat) => string }[] {
   const base: { header: string; width: number; value: (s: LaneStat) => string }[] = [
     { header: '판수', width: 4, value: (s) => `${s.games}` },
-    { header: '승률', width: 5, value: (s) => `${((s.wins / s.games) * 100).toFixed(0)}%` },
+    { header: '승률', width: 4, value: (s) => `${((s.wins / s.games) * 100).toFixed(0)}%` },
     {
       header: 'KDA',
       width: 5,
@@ -84,7 +111,7 @@ function columnsFor(
     },
     {
       header: '킬관여',
-      width: 5,
+      width: 6,
       value: (s) => `${((s.totalKillParticipation / s.games) * 100).toFixed(0)}%`,
     },
   ];
@@ -105,8 +132,8 @@ function columnsFor(
       return [
         ...base,
         { header: 'DPM', width: 6, value: (s) => dpm(s.totalDamage, s.totalGameDurationSecs) },
-        { header: '오브젝트', width: 5, value: (s) => (s.totalDragonBaron / s.games).toFixed(1) },
-        { header: '적정글', width: 5, value: (s) => (s.totalEnemyJungle / s.games).toFixed(1) },
+        { header: '오브젝트', width: 8, value: (s) => (s.totalDragonBaron / s.games).toFixed(1) },
+        { header: '적정글', width: 6, value: (s) => (s.totalEnemyJungle / s.games).toFixed(1) },
         { header: 'CC', width: 4, value: (s) => `${Math.round(s.totalCcTime / s.games)}` },
       ];
     case 'MIDDLE':
@@ -146,16 +173,19 @@ const NAME_WIDTH = 10;
 
 function buildTable(entries: [string, LaneStat][], position: Position, offset: number): string {
   const columns = columnsFor(position);
-  const header =
-    pad('#', 3) + pad('이름', NAME_WIDTH) + columns.map((c) => pad(c.header, c.width)).join('');
+  const header = [
+    padVisual('#', 3),
+    padVisual('이름', NAME_WIDTH),
+    ...columns.map((c) => padVisual(c.header, c.width)),
+  ].join(' ');
   const lines = entries.map(([name, stat], i) => {
     const rank = offset + i + 1;
     const rankStr = MEDALS[offset + i] ? MEDALS[offset + i] : `${rank}`;
-    return (
-      pad(rankStr, 3) +
-      pad(name, NAME_WIDTH) +
-      columns.map((c) => pad(c.value(stat), c.width)).join('')
-    );
+    return [
+      padVisual(rankStr, 3),
+      padVisual(name, NAME_WIDTH),
+      ...columns.map((c) => padVisual(c.value(stat), c.width)),
+    ].join(' ');
   });
   return ['```', header, ...lines, '```'].join('\n');
 }
