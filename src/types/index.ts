@@ -4,11 +4,6 @@ export interface RiotAccount {
   tagLine: string;
 }
 
-export interface MatchCallbackPayload {
-  matchId: string;
-  tournamentCode: string;
-}
-
 export interface RiotMatchParticipant {
   puuid: string;
   teamId: number; // 100=BLUE, 200=RED
@@ -43,12 +38,17 @@ export interface RiotMatchParticipant {
   };
 }
 
+export interface RiotMatchBan {
+  championId: number;
+  pickTurn: number;
+}
+
 export interface RiotMatchInfo {
   gameId: number;
   gameType: string;
   gameDuration: number;
   gameCreation: number;
-  teams: { teamId: number; win: boolean }[];
+  teams: { teamId: number; win: boolean; bans: RiotMatchBan[] }[];
   participants: RiotMatchParticipant[];
 }
 

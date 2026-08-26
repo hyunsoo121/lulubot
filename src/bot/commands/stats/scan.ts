@@ -16,6 +16,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const isSelf = targetUser.id === interaction.user.id;
   const targetLabel = isSelf ? '내' : `**${targetUser.displayName}**의`;
 
+  if (!isSelf && !interaction.memberPermissions?.has('Administrator')) {
+    await interaction.reply({
+      content: '❌ 다른 멤버의 전적 갱신은 관리자만 실행할 수 있습니다.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   // 진행 중 체크
   if (await isScanningUser(discordUserId)) {
     await interaction.reply({

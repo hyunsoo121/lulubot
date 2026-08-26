@@ -11,8 +11,8 @@ import { getTitlesForAccount } from '../../../services/titleService';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
-  .setName('랭킹')
-  .setDescription('서버 멤버의 종합 랭킹을 조회합니다. (서버 기반)');
+  .setName('종합랭킹')
+  .setDescription('서버 등록 계정의 전체 게임 기준 종합 랭킹을 조회합니다.');
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 const PAGE_SIZE = 10;
@@ -40,7 +40,6 @@ async function buildRows(
 
       const accountsStr = accounts.map((a) => `${a.gameName}#${a.tagLine}`).join(', ');
 
-      // 대표 칭호: 첫 번째 칭호만 표시
       const titles = await getTitlesForAccount(accounts[0].id, guildServerId).catch(() => []);
       const titleStr = titles.length > 0 ? ` ${titles[0].icon}${titles[0].name}` : '';
 
@@ -57,11 +56,11 @@ async function buildRows(
 
 function buildEmbed(rows: string[], page: number, totalPages: number) {
   return new EmbedBuilder()
-    .setTitle('🏆 서버 랭킹')
+    .setTitle('🌐 종합 랭킹')
     .setDescription(rows.join('\n'))
     .setColor(0xffd700)
     .setFooter({
-      text: `서버 기반 · 판수 → 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지`,
+      text: `전체 게임 기준 · 판수 → 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지`,
     })
     .setTimestamp();
 }
@@ -69,12 +68,12 @@ function buildEmbed(rows: string[], page: number, totalPages: number) {
 function buildButtons(page: number, totalPages: number) {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId('ranking_prev')
+      .setCustomId('overallranking_prev')
       .setLabel('◀ 이전')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page === 0),
     new ButtonBuilder()
-      .setCustomId('ranking_next')
+      .setCustomId('overallranking_next')
       .setLabel('다음 ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages - 1),
@@ -92,7 +91,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     create: { id: guildServerId, serverName: interaction.guild?.name },
   });
 
-  const entries = await getRanking(guildServerId, { serverOnly: true });
+  const entries = await getRanking(guildServerId);
 
   if (entries.length === 0) {
     await interaction.editReply(
@@ -120,8 +119,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       return;
     }
 
-    if (btn.customId === 'ranking_prev') page--;
-    if (btn.customId === 'ranking_next') page++;
+    if (btn.customId === 'overallranking_prev') page--;
+    if (btn.customId === 'overallranking_next') page++;
 
     const newRows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
     await btn.update({

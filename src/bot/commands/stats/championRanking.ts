@@ -7,58 +7,49 @@ import {
   EmbedBuilder,
   SlashCommandBuilder,
 } from 'discord.js';
-import { TITLE_DEFINITIONS, getTitleRanking } from '../../../services/titleService';
+import { getChampionRanking } from '../../../services/stats';
+import { getAllChampions, getChampionName } from '../../../lib/championNames';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
-  .setName('칭호순위')
-  .setDescription('특정 칭호의 서버 내 전체 순위를 조회합니다.')
+  .setName('챔피언랭킹')
+  .setDescription('서버 등록 계정의 챔피언별 랭킹을 조회합니다. (전체 게임 기준)')
   .addStringOption((option) =>
     option
-      .setName('칭호')
-      .setDescription('조회할 칭호 이름')
+      .setName('챔피언')
+      .setDescription('조회할 챔피언')
       .setRequired(true)
       .setAutocomplete(true),
   );
 
-const TITLE_LIST = Object.values(TITLE_DEFINITIONS);
 const PAGE_SIZE = 10;
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 export async function autocomplete(interaction: AutocompleteInteraction) {
   const focused = interaction.options.getFocused().toLowerCase();
-  const filtered = TITLE_LIST.filter(
-    (t) => t.name.toLowerCase().includes(focused) || t.code.toLowerCase().includes(focused),
-  ).slice(0, 25);
-  await interaction.respond(filtered.map((t) => ({ name: `${t.icon} ${t.name}`, value: t.code })));
+  const champions = await getAllChampions();
+  const filtered = champions.filter((c) => c.name.toLowerCase().includes(focused)).slice(0, 25);
+  await interaction.respond(filtered.map((c) => ({ name: c.name, value: String(c.id) })));
 }
 
-function buildEmbed(
-  rows: string[],
-  titleCode: string,
-  page: number,
-  totalPages: number,
-): EmbedBuilder {
-  const def = TITLE_DEFINITIONS[titleCode];
+function buildEmbed(rows: string[], championName: string, page: number, totalPages: number) {
   return new EmbedBuilder()
-    .setTitle(`${def.icon} ${def.name} 순위`)
+    .setTitle(`${championName} 랭킹`)
     .setDescription(rows.join('\n') || '데이터 없음')
     .setColor(0x5865f2)
-    .setFooter({
-      text: `${def.description} · 3판 이상 기준 · ${page + 1}/${totalPages} 페이지`,
-    })
+    .setFooter({ text: `판수 → 승률 → KDA 순 정렬 · ${page + 1}/${totalPages} 페이지` })
     .setTimestamp();
 }
 
 function buildButtons(page: number, totalPages: number) {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId('titlerank_prev')
+      .setCustomId('champrank_prev')
       .setLabel('◀ 이전')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page === 0),
     new ButtonBuilder()
-      .setCustomId('titlerank_next')
+      .setCustomId('champrank_next')
       .setLabel('다음 ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages - 1),
@@ -68,33 +59,46 @@ function buildButtons(page: number, totalPages: number) {
 export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
-  const titleCode = interaction.options.getString('칭호', true);
-  // 자동완성 없이 자유 입력이 가능하므로 Object.prototype 상속 멤버(toString 등)와
-  // 매칭되지 않도록 실제 소유 프로퍼티인지 먼저 확인
-  const def = Object.hasOwn(TITLE_DEFINITIONS, titleCode)
-    ? TITLE_DEFINITIONS[titleCode]
-    : undefined;
+  const raw = interaction.options.getString('챔피언', true).trim();
+  let championId = Number(raw);
 
-  if (!def) {
-    await interaction.editReply('존재하지 않는 칭호입니다.');
-    return;
+  // 자동완성에서 고르지 않고 이름을 직접 입력한 경우 — 이름으로 찾아본다
+  if (!Number.isInteger(championId)) {
+    const champions = await getAllChampions();
+    const exact = champions.find((c) => c.name === raw);
+    if (exact) {
+      championId = exact.id;
+    } else {
+      const matches = champions.filter((c) => c.name.includes(raw));
+      if (matches.length === 1) {
+        championId = matches[0].id;
+      } else if (matches.length > 1) {
+        await interaction.editReply(
+          `❌ "${raw}"에 해당하는 챔피언이 여러 개입니다: ${matches.map((c) => c.name).join(', ')}\n정확한 이름을 입력하거나 자동완성 목록에서 선택해주세요.`,
+        );
+        return;
+      } else {
+        await interaction.editReply(
+          '❌ 해당하는 챔피언을 찾을 수 없습니다. 자동완성 목록에서 선택하거나 정확한 이름을 입력해주세요.',
+        );
+        return;
+      }
+    }
   }
 
   const guildServerId = BigInt(interaction.guildId!);
-  const ranking = await getTitleRanking(guildServerId, titleCode);
+  const championName = await getChampionName(championId);
+  const ranking = await getChampionRanking(guildServerId, championId);
 
   if (ranking.length === 0) {
-    await interaction.editReply(`${def.icon} **${def.name}** 칭호에 대한 데이터가 없습니다.`);
+    await interaction.editReply(`${championName} 랭킹 데이터가 없습니다.`);
     return;
   }
 
-  // lolAccountId → 표시명 매핑
-  const accountIds = ranking.map((r) => r.lolAccountId);
   const accounts = await prisma.lolAccount.findMany({
-    where: { id: { in: accountIds } },
+    where: { id: { in: ranking.map((r) => r.lolAccountId) } },
     include: { user: true },
   });
-
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
   const allRows = await Promise.all(
@@ -102,7 +106,6 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       const medal = MEDALS[i] ?? `**${i + 1}.**`;
       const acc = accountMap.get(r.lolAccountId);
       let memberName = acc ? `${acc.gameName}#${acc.tagLine}` : '알 수 없음';
-
       if (acc?.user?.discordUserId) {
         try {
           const member = await interaction.guild!.members.fetch(acc.user.discordUserId.toString());
@@ -111,9 +114,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           // 서버 미접속
         }
       }
-
-      const valStr = def.formatValue(r.value);
-      return `${medal} **${memberName}** — \`${valStr}\``;
+      const wr = ((r.wins / r.games) * 100).toFixed(1);
+      const kda = ((r.kills + r.assists) / Math.max(r.deaths, 1)).toFixed(2);
+      return `${medal} **${memberName}** — ${r.games}판 ${wr}% KDA ${kda}`;
     }),
   );
 
@@ -121,7 +124,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   let page = 0;
 
   const message = await interaction.editReply({
-    embeds: [buildEmbed(allRows.slice(0, PAGE_SIZE), titleCode, page, totalPages)],
+    embeds: [buildEmbed(allRows.slice(0, PAGE_SIZE), championName, page, totalPages)],
     components: totalPages > 1 ? [buildButtons(page, totalPages)] : [],
   });
 
@@ -138,13 +141,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         });
         return;
       }
-      if (btn.customId === 'titlerank_prev') page--;
-      if (btn.customId === 'titlerank_next') page++;
+      if (btn.customId === 'champrank_prev') page--;
+      if (btn.customId === 'champrank_next') page++;
       await btn.update({
         embeds: [
           buildEmbed(
             allRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-            titleCode,
+            championName,
             page,
             totalPages,
           ),
@@ -152,7 +155,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         components: [buildButtons(page, totalPages)],
       });
     } catch (e) {
-      console.error('[칭호순위] 버튼 처리 오류:', e);
+      console.error('[챔피언랭킹] 버튼 처리 오류:', e);
     }
   });
 

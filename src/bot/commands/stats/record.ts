@@ -6,8 +6,8 @@ import { tierScore, formatTier } from '../../../lib/tierUtils';
 import { getTitlesForDiscordUser } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
-  .setName('전적')
-  .setDescription('전적을 조회합니다.')
+  .setName('유저전적')
+  .setDescription('서버 내 커스텀 게임 전적을 조회합니다.')
   .addUserOption((option) => option.setName('유저').setDescription('조회할 유저 (미입력 시 본인)'));
 
 export async function execute(interaction: ChatInputCommandInteraction) {

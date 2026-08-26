@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import prisma from '../../../lib/prisma';
 import { getAccountByDiscordId } from '../../../services/account';
+import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
   .setName('계정삭제')
@@ -16,6 +17,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const target = interaction.options.getUser('유저', true);
   const input = interaction.options.getString('닉네임태그', true);
   const [gameName, tagLine] = input.split('#');
+
+  if (target.id !== interaction.user.id && !interaction.memberPermissions?.has('Administrator')) {
+    await interaction.editReply('❌ 다른 멤버의 계정 삭제는 관리자만 할 수 있습니다.');
+    return;
+  }
 
   if (!gameName || !tagLine) {
     await interaction.editReply('올바른 형식으로 입력해주세요. 예) 롤닉#KR1');
@@ -60,6 +66,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         where: { userId: user.id, guildServerId },
       });
     }
+  }
+
+  // 삭제한 계정이 보유하던 칭호가 남지 않도록 재계산
+  if (guildServerId) {
+    await recalculateTitles(guildServerId).catch((e) =>
+      console.error('[계정삭제] 칭호 재계산 실패:', e),
+    );
   }
 
   await interaction.editReply(

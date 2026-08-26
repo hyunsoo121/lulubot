@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { filterMatchIds } from './matchFilter';
 
 export interface TitleInfo {
   code: string;
@@ -433,7 +434,7 @@ export const TITLE_DEFINITIONS: Record<string, TitleInfo> = {
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 /** 서버에 속한 유저들의 lolAccountId 목록 */
-async function getServerAccountIds(guildServerId: bigint): Promise<bigint[]> {
+export async function getServerAccountIds(guildServerId: bigint): Promise<bigint[]> {
   const entries = await prisma.userGuildServer.findMany({
     where: { guildServerId },
     include: { user: { include: { lolAccounts: true } } },
@@ -442,8 +443,7 @@ async function getServerAccountIds(guildServerId: bigint): Promise<bigint[]> {
 }
 
 /** 서버 유저들이 참여한 매치 ID 목록 */
-async function getServerMatchIds(guildServerId: bigint): Promise<bigint[]> {
-  const accountIds = await getServerAccountIds(guildServerId);
+export async function getServerMatchIds(accountIds: bigint[]): Promise<bigint[]> {
   if (accountIds.length === 0) return [];
 
   const stats = await prisma.playerMatchStat.findMany({
@@ -456,18 +456,21 @@ async function getServerMatchIds(guildServerId: bigint): Promise<bigint[]> {
 
 type GroupRow = { lolAccountId: bigint; value: number };
 
-/** groupBy 없이 집계: 서버 매치에 참여한 계정별로 특정 값 합산 또는 평균 */
+/** groupBy 없이 집계: 서버 매치에 참여한 계정별로 특정 값 합산 또는 평균
+ *  (matchId뿐 아니라 lolAccountId도 서버 소속 계정으로 제한 — 같은 매치에 낀 타 서버 계정 배제)
+ */
 async function aggregateByAccount(
   matchIds: bigint[],
+  accountIds: bigint[],
   field: string,
   agg: 'avg' | 'sum',
   where: Record<string, unknown> = {},
 ): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
-    where: { matchId: { in: matchIds }, ...where },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, ...where },
     [`_${agg}`]: { [field]: true },
     _count: { id: true },
   })) as PrismaGroupRow[];
@@ -482,7 +485,7 @@ async function aggregateByAccount(
 /** 1위 값과 동일한 모든 계정 반환 (동점 처리)
  *  - desc: 1위 값이 0이면 의미 없는 데이터로 간주 → 아무도 받지 않음
  */
-function topAllBy(rows: GroupRow[], order: 'desc' | 'asc'): TitleHolder[] {
+export function topAllBy(rows: GroupRow[], order: 'desc' | 'asc'): TitleHolder[] {
   if (rows.length === 0) return [];
   const sorted = [...rows].sort((a, b) =>
     order === 'desc' ? b.value - a.value : a.value - b.value,
@@ -497,16 +500,17 @@ function topAllBy(rows: GroupRow[], order: 'desc' | 'asc'): TitleHolder[] {
 /** 포지션 필터 포함 avg/sum (최소 3게임) */
 async function aggregateByPosition(
   matchIds: bigint[],
+  accountIds: bigint[],
   position: string,
   field: string,
   agg: 'avg' | 'sum',
   minGames = 3,
 ): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
-    where: { matchId: { in: matchIds }, position },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, position },
     [`_${agg}`]: { [field]: true },
     _count: { id: true },
   })) as PrismaGroupRow[];
@@ -552,7 +556,7 @@ const PER_MIN_FIELDS = {
 
 type PerMinField = keyof typeof PER_MIN_FIELDS;
 
-function buildPerMinMap(
+export function buildPerMinMap(
   stats: StatWithDuration[],
   field: PerMinField,
   minGames: number,
@@ -573,12 +577,13 @@ function buildPerMinMap(
 /** 분당 계산: field 합계 / 총 게임시간(분) — 계정별 */
 async function aggregatePerMin(
   matchIds: bigint[],
+  accountIds: bigint[],
   field: PerMinField,
   where: Record<string, unknown> = {},
 ): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds }, ...where },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, ...where },
     select: {
       lolAccountId: true,
       ...PER_MIN_FIELDS,
@@ -591,13 +596,14 @@ async function aggregatePerMin(
 /** 포지션 필터 포함 분당 계산 */
 async function aggregatePerMinByPosition(
   matchIds: bigint[],
+  accountIds: bigint[],
   position: string,
   field: PerMinField,
   minGames = 3,
 ): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds }, position },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, position },
     select: {
       lolAccountId: true,
       ...PER_MIN_FIELDS,
@@ -608,10 +614,14 @@ async function aggregatePerMinByPosition(
 }
 
 /** 포지션별 승률 */
-async function winRateByPosition(matchIds: bigint[], position: string): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+async function winRateByPosition(
+  matchIds: bigint[],
+  accountIds: bigint[],
+  position: string,
+): Promise<GroupRow[]> {
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds }, position },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, position },
     select: { lolAccountId: true, isWin: true },
   });
   const map = new Map<bigint, { wins: number; total: number }>();
@@ -627,10 +637,14 @@ async function winRateByPosition(matchIds: bigint[], position: string): Promise<
 }
 
 /** 연승/연패 최장 기록 — 전체 계정 정렬 반환 */
-async function allStreakRows(matchIds: bigint[], targetWin: boolean): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+async function allStreakRows(
+  matchIds: bigint[],
+  accountIds: bigint[],
+  targetWin: boolean,
+): Promise<GroupRow[]> {
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds } },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
     select: { lolAccountId: true, isWin: true, matchRecord: { select: { playedAt: true } } },
     orderBy: [{ lolAccountId: 'asc' }, { matchRecord: { playedAt: 'asc' } }],
   });
@@ -659,10 +673,10 @@ async function allStreakRows(matchIds: bigint[], targetWin: boolean): Promise<Gr
 }
 
 /** 신인왕 수치 — 전체 계정 정렬 반환 */
-async function allRookieRows(matchIds: bigint[]): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+async function allRookieRows(matchIds: bigint[], accountIds: bigint[]): Promise<GroupRow[]> {
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds } },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
     select: { lolAccountId: true, isWin: true, matchRecord: { select: { playedAt: true } } },
     orderBy: [{ lolAccountId: 'asc' }, { matchRecord: { playedAt: 'asc' } }],
   });
@@ -684,10 +698,14 @@ async function allRookieRows(matchIds: bigint[]): Promise<GroupRow[]> {
 }
 
 /** 연승/연패 최장 기록 — 동점자 전원 반환 */
-async function maxStreakAccounts(matchIds: bigint[], targetWin: boolean): Promise<TitleHolder[]> {
-  if (matchIds.length === 0) return [];
+async function maxStreakAccounts(
+  matchIds: bigint[],
+  accountIds: bigint[],
+  targetWin: boolean,
+): Promise<TitleHolder[]> {
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds } },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
     select: { lolAccountId: true, isWin: true, matchRecord: { select: { playedAt: true } } },
     orderBy: [{ lolAccountId: 'asc' }, { matchRecord: { playedAt: 'asc' } }],
   });
@@ -718,16 +736,39 @@ async function maxStreakAccounts(matchIds: bigint[], targetWin: boolean): Promis
     .map(([id, v]) => ({ lolAccountId: id, value: v }));
 }
 
-/** 조건부 카운트 (예: isWin && gameDuration >= X) */
-async function countCondition(
+/** matchIds 내에서 계정별 총 참여 게임 수 ≥ minGames 인 계정 집합
+ *  (조건부 카운트 칭호도 다른 칭호와 동일하게 표본 최소 기준을 적용하기 위함)
+ */
+async function eligibleAccountIds(
   matchIds: bigint[],
-  where: Record<string, unknown>,
-): Promise<GroupRow[]> {
-  if (matchIds.length === 0) return [];
+  accountIds: bigint[],
+  minGames = 3,
+): Promise<Set<bigint>> {
+  if (matchIds.length === 0 || accountIds.length === 0) return new Set();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
-    where: { matchId: { in: matchIds }, ...where },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
+    _count: { id: true },
+  })) as PrismaGroupRow[];
+  return new Set(rows.filter((r) => r._count.id >= minGames).map((r) => r.lolAccountId));
+}
+
+/** 조건부 카운트 (예: isWin && gameDuration >= X)
+ *  matchIds 내 최소 3게임 이상 참여한 서버 소속 계정만 후보로 삼는다.
+ */
+async function countCondition(
+  matchIds: bigint[],
+  accountIds: bigint[],
+  where: Record<string, unknown>,
+): Promise<GroupRow[]> {
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
+  const eligible = await eligibleAccountIds(matchIds, accountIds);
+  if (eligible.size === 0) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await (prisma as any).playerMatchStat.groupBy({
+    by: ['lolAccountId'],
+    where: { matchId: { in: matchIds }, lolAccountId: { in: [...eligible] }, ...where },
     _count: { id: true },
   })) as PrismaGroupRow[];
   return rows.map((r) => ({
@@ -759,10 +800,10 @@ async function setTitleHolders(
 
 // ─── 신인왕: 서버 첫 10게임 승률 1위 ────────────────────────────────────────
 
-async function rookieKings(matchIds: bigint[]): Promise<TitleHolder[]> {
-  if (matchIds.length === 0) return [];
+async function rookieKings(matchIds: bigint[], accountIds: bigint[]): Promise<TitleHolder[]> {
+  if (matchIds.length === 0 || accountIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
-    where: { matchId: { in: matchIds } },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
     select: { lolAccountId: true, isWin: true, matchRecord: { select: { playedAt: true } } },
     orderBy: [{ lolAccountId: 'asc' }, { matchRecord: { playedAt: 'asc' } }],
   });
@@ -786,21 +827,25 @@ async function rookieKings(matchIds: bigint[]): Promise<TitleHolder[]> {
 
 // ─── 불사신: deaths=0 이면서 이긴 횟수 1위 ─────────────────────────────────
 
-async function immortals(matchIds: bigint[]): Promise<TitleHolder[]> {
-  const rows = await countCondition(matchIds, { isWin: true, deaths: 0 });
+async function immortals(matchIds: bigint[], accountIds: bigint[]): Promise<TitleHolder[]> {
+  const rows = await countCondition(matchIds, accountIds, { isWin: true, deaths: 0 });
   return topAllBy(rows, 'desc');
 }
 
 // ─── main export ─────────────────────────────────────────────────────────────
 
 export async function recalculateTitles(guildServerId: bigint): Promise<void> {
-  const matchIds = await getServerMatchIds(guildServerId);
+  const accountIds = await getServerAccountIds(guildServerId);
+  const allMatchIds = await getServerMatchIds(accountIds);
+  // 칭호는 무조건 서버 기반(매치 참가자 8명 이상이 서버 등록 계정)으로 계산
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, { serverOnly: true });
   if (matchIds.length === 0) return;
 
-  const all = (field: string, agg: 'avg' | 'sum') => aggregateByAccount(matchIds, field, agg);
+  const all = (field: string, agg: 'avg' | 'sum') =>
+    aggregateByAccount(matchIds, accountIds, field, agg);
   const pos = (position: string, field: string, agg: 'avg' | 'sum', min?: number) =>
-    aggregateByPosition(matchIds, position, field, agg, min);
-  const posWr = (position: string) => winRateByPosition(matchIds, position);
+    aggregateByPosition(matchIds, accountIds, position, field, agg, min);
+  const posWr = (position: string) => winRateByPosition(matchIds, accountIds, position);
 
   // 게임 수 기반 duration 필터용 (서버 유저 매치 중 조건 필터)
   const longIds = (
@@ -836,17 +881,23 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   ): Promise<TR> => pos(position, field, agg).then((r) => [code, topAllBy(r, order)]);
 
   const pm = (code: string, field: PerMinField): Promise<TR> =>
-    aggregatePerMin(matchIds, field).then((r) => [code, topAllBy(r, 'desc')]);
+    aggregatePerMin(matchIds, accountIds, field).then((r) => [code, topAllBy(r, 'desc')]);
 
   const pmp = (code: string, position: string, field: PerMinField): Promise<TR> =>
-    aggregatePerMinByPosition(matchIds, position, field).then((r) => [code, topAllBy(r, 'desc')]);
+    aggregatePerMinByPosition(matchIds, accountIds, position, field).then((r) => [
+      code,
+      topAllBy(r, 'desc'),
+    ]);
 
   const titleResults: TR[] = await Promise.all([
     // 전투
     safe('학살자', t('학살자', all('kills', 'avg'), 'desc')),
     safe('생존왕', t('생존왕', all('deaths', 'avg'), 'asc')),
     safe('킹메이커', t('킹메이커', all('assists', 'avg'), 'desc')),
-    safe('퍼블전문가', t('퍼블전문가', countCondition(matchIds, { firstBloodKill: true }), 'desc')),
+    safe(
+      '퍼블전문가',
+      t('퍼블전문가', countCondition(matchIds, accountIds, { firstBloodKill: true }), 'desc'),
+    ),
     safe('펜타킬러', t('펜타킬러', all('pentaKills', 'sum'), 'desc')),
     safe('쿼드라킬러', t('쿼드라킬러', all('quadraKills', 'sum'), 'desc')),
     // 딜/탱
@@ -871,25 +922,27 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     Promise.resolve(['개근상', []] as TR),
     safe(
       '연승왕',
-      maxStreakAccounts(matchIds, true).then((r) => ['연승왕', r]),
+      maxStreakAccounts(matchIds, accountIds, true).then((r) => ['연승왕', r]),
     ),
     safe(
       '연패왕',
-      maxStreakAccounts(matchIds, false).then((r) => ['연패왕', r]),
+      maxStreakAccounts(matchIds, accountIds, false).then((r) => ['연패왕', r]),
     ),
     safe(
       '불사신',
-      immortals(matchIds).then((r) => ['불사신', r]),
+      immortals(matchIds, accountIds).then((r) => ['불사신', r]),
     ),
     safe(
       '신인왕',
-      rookieKings(matchIds).then((r) => ['신인왕', r]),
+      rookieKings(matchIds, accountIds).then((r) => ['신인왕', r]),
     ),
     safe(
       '끈기왕',
       t(
         '끈기왕',
-        longIds.length > 0 ? countCondition(longIds, { isWin: true }) : Promise.resolve([]),
+        longIds.length > 0
+          ? countCondition(longIds, accountIds, { isWin: true })
+          : Promise.resolve([]),
         'desc',
       ),
     ),
@@ -897,7 +950,9 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       '속전속결',
       t(
         '속전속결',
-        shortIds.length > 0 ? countCondition(shortIds, { isWin: true }) : Promise.resolve([]),
+        shortIds.length > 0
+          ? countCondition(shortIds, accountIds, { isWin: true })
+          : Promise.resolve([]),
         'desc',
       ),
     ),
@@ -970,7 +1025,7 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gameCounts = (await (prisma as any).playerMatchStat.groupBy({
     by: ['lolAccountId'],
-    where: { matchId: { in: matchIds } },
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
     _count: { id: true },
   })) as PrismaGroupRow[];
   const gameCountRows: GroupRow[] = gameCounts.map((r) => ({
@@ -979,12 +1034,13 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   }));
   const mostGamesIds = topAllBy(gameCountRows, 'desc');
 
-  // DB 저장
-  for (const [code, accountIds] of titleResults) {
-    if (code === '개근상') continue;
-    await setTitleHolders(guildServerId, code, accountIds);
-  }
-  await setTitleHolders(guildServerId, '개근상', mostGamesIds);
+  // DB 저장 — 각 칭호는 서로 다른 titleCode 행만 건드리므로 병렬로 저장해도 안전
+  await Promise.all([
+    ...titleResults
+      .filter(([code]) => code !== '개근상')
+      .map(([code, holders]) => setTitleHolders(guildServerId, code, holders)),
+    setTitleHolders(guildServerId, '개근상', mostGamesIds),
+  ]);
 }
 
 export interface TitleRankRow {
@@ -1000,16 +1056,19 @@ export async function getTitleRanking(
   guildServerId: bigint,
   titleCode: string,
 ): Promise<TitleRankRow[]> {
-  const matchIds = await getServerMatchIds(guildServerId);
+  const accountIds = await getServerAccountIds(guildServerId);
+  const allMatchIds = await getServerMatchIds(accountIds);
+  // 칭호순위도 무조건 서버 기반으로 계산 (recalculateTitles와 동일 기준)
+  const matchIds = await filterMatchIds(allMatchIds, accountIds, { serverOnly: true });
   if (matchIds.length === 0) return [];
 
   const all = (field: string, agg: 'avg' | 'sum', where: Record<string, unknown> = {}) =>
-    aggregateByAccount(matchIds, field, agg, where);
+    aggregateByAccount(matchIds, accountIds, field, agg, where);
   const pos = (position: string, field: string, agg: 'avg' | 'sum') =>
-    aggregateByPosition(matchIds, position, field, agg);
-  const pm = (field: PerMinField) => aggregatePerMin(matchIds, field);
+    aggregateByPosition(matchIds, accountIds, position, field, agg);
+  const pm = (field: PerMinField) => aggregatePerMin(matchIds, accountIds, field);
   const pmp = (position: string, field: PerMinField) =>
-    aggregatePerMinByPosition(matchIds, position, field);
+    aggregatePerMinByPosition(matchIds, accountIds, position, field);
 
   async function sorted(rows: Promise<GroupRow[]>, order: 'desc' | 'asc'): Promise<TitleRankRow[]> {
     const r = await rows;
@@ -1039,7 +1098,7 @@ export async function getTitleRanking(
     case '킹메이커':
       return sorted(all('assists', 'avg'), 'desc');
     case '퍼블전문가':
-      return sorted(countCondition(matchIds, { firstBloodKill: true }), 'desc');
+      return sorted(countCondition(matchIds, accountIds, { firstBloodKill: true }), 'desc');
     case '펜타킬러':
       return sorted(all('pentaKills', 'sum'), 'desc');
     case '쿼드라킬러':
@@ -1078,12 +1137,12 @@ export async function getTitleRanking(
     case '흑백모니터':
       return sorted(all('deaths', 'avg'), 'desc');
     case '불사신':
-      return sorted(countCondition(matchIds, { isWin: true, deaths: 0 }), 'desc');
+      return sorted(countCondition(matchIds, accountIds, { isWin: true, deaths: 0 }), 'desc');
     case '개근상': {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = (await (prisma as any).playerMatchStat.groupBy({
         by: ['lolAccountId'],
-        where: { matchId: { in: matchIds } },
+        where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
         _count: { id: true },
       })) as PrismaGroupRow[];
       return rows
@@ -1091,24 +1150,28 @@ export async function getTitleRanking(
         .sort((a, b) => b.value - a.value);
     }
     case '연승왕':
-      return allStreakRows(matchIds, true);
+      return allStreakRows(matchIds, accountIds, true);
     case '연패왕':
-      return allStreakRows(matchIds, false);
+      return allStreakRows(matchIds, accountIds, false);
     case '신인왕':
-      return allRookieRows(matchIds);
+      return allRookieRows(matchIds, accountIds);
     case '끈기왕':
       return sorted(
-        longIds.length > 0 ? countCondition(longIds, { isWin: true }) : Promise.resolve([]),
+        longIds.length > 0
+          ? countCondition(longIds, accountIds, { isWin: true })
+          : Promise.resolve([]),
         'desc',
       );
     case '속전속결':
       return sorted(
-        shortIds.length > 0 ? countCondition(shortIds, { isWin: true }) : Promise.resolve([]),
+        shortIds.length > 0
+          ? countCondition(shortIds, accountIds, { isWin: true })
+          : Promise.resolve([]),
         'desc',
       );
     // 탑
     case 'TOPKING':
-      return sorted(winRateByPosition(matchIds, 'TOP'), 'desc');
+      return sorted(winRateByPosition(matchIds, accountIds, 'TOP'), 'desc');
     case '전사왕':
       return sorted(pos('TOP', 'killParticipation', 'avg'), 'desc');
     case '고기방패':
@@ -1119,7 +1182,7 @@ export async function getTitleRanking(
       return sorted(pos('TOP', 'soloKills', 'sum'), 'desc');
     // 정글
     case 'JUGKING':
-      return sorted(winRateByPosition(matchIds, 'JUNGLE'), 'desc');
+      return sorted(winRateByPosition(matchIds, accountIds, 'JUNGLE'), 'desc');
     case '포식자':
       return sorted(pos('JUNGLE', 'killParticipation', 'avg'), 'desc');
     case '오브젝트마스터': {
@@ -1140,7 +1203,7 @@ export async function getTitleRanking(
       return sorted(pmp('JUNGLE', 'enemyJungleMinions'), 'desc');
     // 미드
     case 'MIDKING':
-      return sorted(winRateByPosition(matchIds, 'MIDDLE'), 'desc');
+      return sorted(winRateByPosition(matchIds, accountIds, 'MIDDLE'), 'desc');
     case '황족':
       return sorted(pos('MIDDLE', 'killParticipation', 'avg'), 'desc');
     case '미드DPM':
@@ -1151,7 +1214,7 @@ export async function getTitleRanking(
       return sorted(pos('MIDDLE', 'soloKills', 'sum'), 'desc');
     // 원딜
     case 'ADKING':
-      return sorted(winRateByPosition(matchIds, 'BOTTOM'), 'desc');
+      return sorted(winRateByPosition(matchIds, accountIds, 'BOTTOM'), 'desc');
     case '해결사':
       return sorted(pos('BOTTOM', 'killParticipation', 'avg'), 'desc');
     case '금수저':
@@ -1162,7 +1225,7 @@ export async function getTitleRanking(
       return sorted(pos('BOTTOM', 'deaths', 'avg'), 'asc');
     // 서폿
     case 'SUPKING':
-      return sorted(winRateByPosition(matchIds, 'UTILITY'), 'desc');
+      return sorted(winRateByPosition(matchIds, accountIds, 'UTILITY'), 'desc');
     case '그림자':
       return sorted(pos('UTILITY', 'killParticipation', 'avg'), 'desc');
     case '와드싸개':

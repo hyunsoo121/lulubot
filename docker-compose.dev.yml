@@ -1,0 +1,28 @@
+name: lulubot-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lulubot-test-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lulubot_test
+    ports:
+      - '15432:5432'
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: lulubot-test-redis
+    restart: unless-stopped
+    ports:
+      - '16379:6379'
+    volumes:
+      - redis_test_data:/data
+
+volumes:
+  postgres_test_data:
+  redis_test_data:

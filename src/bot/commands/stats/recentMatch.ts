@@ -10,6 +10,14 @@ const POSITION_KR: Record<string, string> = {
   UNKNOWN: '?',
 };
 
+const POSITION_ORDER: Record<string, number> = {
+  TOP: 0,
+  JUNGLE: 1,
+  MIDDLE: 2,
+  BOTTOM: 3,
+  UTILITY: 4,
+};
+
 export const data = new SlashCommandBuilder()
   .setName('최근경기')
   .setDescription('마지막 내전 결과를 조회합니다.')
@@ -40,7 +48,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const redTeam = matchRecord.playerStats.filter((p) => p.team === 'RED');
 
   function formatTeam(players: typeof blueTeam) {
-    return players
+    return [...players]
+      .sort((a, b) => (POSITION_ORDER[a.position] ?? 5) - (POSITION_ORDER[b.position] ?? 5))
       .map((p) => {
         const pos = POSITION_KR[p.position] ?? p.position;
         const name = p.lolAccount.gameName;
