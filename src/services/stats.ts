@@ -36,6 +36,29 @@ export interface MostChampion {
   assists: number;
 }
 
+/** 판수 → 승률 → KDA 내림차순 비교자 (games=0인 항목은 항상 뒤로) */
+function compareByGamesWinrateKda<
+  T extends { games: number; wins: number; kills: number; deaths: number; assists: number },
+>(a: T, b: T): number {
+  if (b.games !== a.games) return b.games - a.games;
+  const wrA = a.games > 0 ? a.wins / a.games : -1;
+  const wrB = b.games > 0 ? b.wins / b.games : -1;
+  if (wrB !== wrA) return wrB - wrA;
+  const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
+  const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
+  return kdaB - kdaA;
+}
+
+/** championId별 승수를 단일 groupBy로 조회 (N+1 방지) */
+async function getChampionWinCounts(lolAccountIds: bigint[]): Promise<Map<number, number>> {
+  const winRows = await prisma.playerMatchStat.groupBy({
+    by: ['championId'],
+    where: { lolAccountId: { in: lolAccountIds }, isWin: true },
+    _count: { championId: true },
+  });
+  return new Map(winRows.map((r) => [r.championId, r._count.championId]));
+}
+
 export async function getGlobalStatByDiscordId(discordUserId: bigint) {
   const user = await prisma.user.findUnique({
     where: { discordUserId },
@@ -63,32 +86,17 @@ export async function getGlobalStatByDiscordId(discordUserId: bigint) {
   });
 
   // 챔피언별 승리 수 조회 후 정렬 (판수 → 승률 → KDA)
-  const mostChampions: MostChampion[] = (
-    await Promise.all(
-      champStats.map(async (c) => {
-        const wins = await prisma.playerMatchStat.count({
-          where: { lolAccountId: { in: lolAccountIds }, championId: c.championId, isWin: true },
-        });
-        return {
-          championId: c.championId,
-          games: c._count.championId,
-          wins,
-          kills: c._sum.kills ?? 0,
-          deaths: c._sum.deaths ?? 0,
-          assists: c._sum.assists ?? 0,
-        };
-      }),
-    )
-  )
-    .sort((a, b) => {
-      if (b.games !== a.games) return b.games - a.games;
-      const wrA = a.wins / a.games;
-      const wrB = b.wins / b.games;
-      if (wrB !== wrA) return wrB - wrA;
-      const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
-      const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
-      return kdaB - kdaA;
-    })
+  const winMap = await getChampionWinCounts(lolAccountIds);
+  const mostChampions: MostChampion[] = champStats
+    .map((c) => ({
+      championId: c.championId,
+      games: c._count.championId,
+      wins: winMap.get(c.championId) ?? 0,
+      kills: c._sum.kills ?? 0,
+      deaths: c._sum.deaths ?? 0,
+      assists: c._sum.assists ?? 0,
+    }))
+    .sort(compareByGamesWinrateKda)
     .slice(0, 3);
 
   return {
@@ -164,15 +172,7 @@ export async function getRanking(
     return { discordUserId: u.discordUserId!, accounts: u.lolAccounts, ...stat };
   });
 
-  return entries.sort((a, b) => {
-    if (b.games !== a.games) return b.games - a.games;
-    const wrA = a.games > 0 ? a.wins / a.games : -1;
-    const wrB = b.games > 0 ? b.wins / b.games : -1;
-    if (wrB !== wrA) return wrB - wrA;
-    const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
-    const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
-    return kdaB - kdaA;
-  });
+  return entries.sort(compareByGamesWinrateKda);
 }
 
 export interface DuoRankRow {
@@ -286,31 +286,17 @@ export async function getMostChampions(discordUserId: bigint): Promise<MostChamp
     _sum: { kills: true, deaths: true, assists: true },
   });
 
-  const result: MostChampion[] = await Promise.all(
-    champStats.map(async (c) => {
-      const wins = await prisma.playerMatchStat.count({
-        where: { lolAccountId: { in: lolAccountIds }, championId: c.championId, isWin: true },
-      });
-      return {
-        championId: c.championId,
-        games: c._count.championId,
-        wins,
-        kills: c._sum.kills ?? 0,
-        deaths: c._sum.deaths ?? 0,
-        assists: c._sum.assists ?? 0,
-      };
-    }),
-  );
+  const winMap = await getChampionWinCounts(lolAccountIds);
+  const result: MostChampion[] = champStats.map((c) => ({
+    championId: c.championId,
+    games: c._count.championId,
+    wins: winMap.get(c.championId) ?? 0,
+    kills: c._sum.kills ?? 0,
+    deaths: c._sum.deaths ?? 0,
+    assists: c._sum.assists ?? 0,
+  }));
 
-  return result.sort((a, b) => {
-    if (b.games !== a.games) return b.games - a.games;
-    const wrA = a.wins / a.games;
-    const wrB = b.wins / b.games;
-    if (wrB !== wrA) return wrB - wrA;
-    const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
-    const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
-    return kdaB - kdaA;
-  });
+  return result.sort(compareByGamesWinrateKda);
 }
 
 export interface ChampionRankRow {
@@ -342,38 +328,24 @@ export async function getChampionRanking(
     _sum: { kills: true, deaths: true, assists: true },
   });
 
-  const wins = await Promise.all(
-    rows.map((r) =>
-      prisma.playerMatchStat.count({
-        where: {
-          matchId: { in: matchIds },
-          lolAccountId: r.lolAccountId,
-          championId,
-          isWin: true,
-        },
-      }),
-    ),
-  );
+  const winRows = await prisma.playerMatchStat.groupBy({
+    by: ['lolAccountId'],
+    where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, championId, isWin: true },
+    _count: { id: true },
+  });
+  const winMap = new Map(winRows.map((r) => [r.lolAccountId, r._count.id]));
 
   return rows
-    .map((r, i) => ({
+    .map((r) => ({
       lolAccountId: r.lolAccountId,
       games: r._count.id,
-      wins: wins[i],
+      wins: winMap.get(r.lolAccountId) ?? 0,
       kills: r._sum.kills ?? 0,
       deaths: r._sum.deaths ?? 0,
       assists: r._sum.assists ?? 0,
     }))
     .filter((r) => r.games >= 1)
-    .sort((a, b) => {
-      if (b.games !== a.games) return b.games - a.games;
-      const wrA = a.wins / a.games;
-      const wrB = b.wins / b.games;
-      if (wrB !== wrA) return wrB - wrA;
-      const kdaA = (a.kills + a.assists) / Math.max(a.deaths, 1);
-      const kdaB = (b.kills + b.assists) / Math.max(b.deaths, 1);
-      return kdaB - kdaA;
-    });
+    .sort(compareByGamesWinrateKda);
 }
 
 export interface CompareStat {

@@ -1034,12 +1034,13 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   }));
   const mostGamesIds = topAllBy(gameCountRows, 'desc');
 
-  // DB 저장
-  for (const [code, holders] of titleResults) {
-    if (code === '개근상') continue;
-    await setTitleHolders(guildServerId, code, holders);
-  }
-  await setTitleHolders(guildServerId, '개근상', mostGamesIds);
+  // DB 저장 — 각 칭호는 서로 다른 titleCode 행만 건드리므로 병렬로 저장해도 안전
+  await Promise.all([
+    ...titleResults
+      .filter(([code]) => code !== '개근상')
+      .map(([code, holders]) => setTitleHolders(guildServerId, code, holders)),
+    setTitleHolders(guildServerId, '개근상', mostGamesIds),
+  ]);
 }
 
 export interface TitleRankRow {
