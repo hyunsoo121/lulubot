@@ -14,6 +14,7 @@ ECR_REGISTRY=$(aws ecr describe-repositories \
   --query 'repositories[0].repositoryUri' --output text | cut -d'/' -f1)
 
 docker run --rm \
+  --pull always \
   --network lulubot-net \
   --env-file .env \
   $ECR_REGISTRY/$ECR_REPOSITORY:latest \
