@@ -97,6 +97,12 @@ const { db, resetDb, fakePrisma, statSeq } = vi.hoisted(() => {
   }
 
   const fakePrisma = {
+    lolAccount: {
+      // matchFilter.ts가 계정→유저 매핑을 조회하는 용도. 이 픽스처에선 계정 하나당
+      // 유저 하나로 1:1 대응(멀티계정 시나리오 없음)이므로 계정 id를 그대로 userId로 사용.
+      findMany: async ({ where }: { where: { id: { in: bigint[] } } }) =>
+        where.id.in.map((id) => ({ id, userId: id })),
+    },
     userGuildServer: {
       findMany: async ({ where }: { where: { guildServerId: bigint } }) =>
         db.guildMembers.filter((g) => g.guildServerId === where.guildServerId),

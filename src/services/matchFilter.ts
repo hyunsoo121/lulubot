@@ -13,7 +13,7 @@ const SERVER_ONLY_MIN_PARTICIPANTS = 8;
 
 /**
  * matchIds를 옵션에 따라 추가로 필터링한다.
- * - serverOnly: 매치별로 서버 등록 계정(accountIds) 참가자 수를 세어 8명 이상인 매치만 남김
+ * - serverOnly: 매치별로 서버 등록 계정(accountIds) 참가자 수를 세어 기준치 이상인 매치만 남김
  * - startDate/endDate: MatchRecord.playedAt 기준 날짜 범위로 제한
  * 새로운 추적 로직 없이 기존 PlayerMatchStat/MatchRecord 데이터만으로 계산한다.
  */
@@ -39,16 +39,42 @@ export async function filterMatchIds(
 
   if (opts.serverOnly) {
     if (accountIds.length === 0) return [];
-    // 서버 등록 계정이 기준치보다 적으면 절대 만족 불가능한 조건이 되므로,
-    // 등록 계정 수만큼으로 기준을 낮춰 작은 서버에서도 매치가 잡히게 한다.
-    const minParticipants = Math.min(SERVER_ONLY_MIN_PARTICIPANTS, accountIds.length);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const counts = (await (prisma as any).playerMatchStat.groupBy({
-      by: ['matchId'],
+
+    // 인원 기준은 라이엇 계정이 아니라 디스코드 유저 단위여야 한다 — 한 유저가
+    // 계정을 여러 개 등록해도 실제 매치엔 그중 하나로만 참여하므로, 계정 수를
+    // 그대로 쓰면 멀티계정 유저가 있는 서버의 기준치가 실제 인원보다 부풀려진다.
+    const accounts = await prisma.lolAccount.findMany({
+      where: { id: { in: accountIds } },
+      select: { id: true, userId: true },
+    });
+    const accountToUser = new Map(accounts.map((a) => [a.id, a.userId]));
+    const uniqueUserCount = new Set(accounts.map((a) => a.userId).filter((id) => id !== null)).size;
+    if (uniqueUserCount === 0) return [];
+
+    // 원래 기준(10명 중 8명=80%)을 서버 등록 유저 수에 비례해서 적용
+    const minParticipants = Math.min(
+      SERVER_ONLY_MIN_PARTICIPANTS,
+      Math.ceil(uniqueUserCount * 0.8),
+    );
+
+    const rows = await prisma.playerMatchStat.findMany({
       where: { matchId: { in: ids }, lolAccountId: { in: accountIds } },
-      _count: { id: true },
-    })) as { matchId: bigint; _count: { id: number } }[];
-    ids = counts.filter((c) => c._count.id >= minParticipants).map((c) => c.matchId);
+      select: { matchId: true, lolAccountId: true },
+    });
+
+    const usersByMatch = new Map<string, Set<bigint>>();
+    for (const r of rows) {
+      const userId = accountToUser.get(r.lolAccountId);
+      if (!userId) continue;
+      const key = r.matchId.toString();
+      const set = usersByMatch.get(key) ?? new Set<bigint>();
+      set.add(userId);
+      usersByMatch.set(key, set);
+    }
+
+    ids = [...usersByMatch.entries()]
+      .filter(([, users]) => users.size >= minParticipants)
+      .map(([key]) => BigInt(key));
   }
 
   return ids;
