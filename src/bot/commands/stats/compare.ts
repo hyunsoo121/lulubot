@@ -124,7 +124,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         value: headToHeadText(user1.displayName, user2.displayName, h2h),
       },
     )
-    .setFooter({ text: '서버 기반 (참가자 8명 이상 매치만 포함)' })
+    .setFooter({ text: '서버 기반 (서버 등록 계정이 대부분인 매치만 포함)' })
     .setTimestamp();
 
   await interaction.editReply({ embeds: [embed] });

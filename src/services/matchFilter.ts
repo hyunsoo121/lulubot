@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma';
 
 export interface MatchFilterOptions {
-  /** true면 매치 참가자 중 서버 등록 계정이 8명 이상인 매치만 포함 */
+  /** true면 매치 참가자 중 서버 등록 계정이 일정 수 이상인 매치만 포함 (기준은 SERVER_ONLY_MIN_PARTICIPANTS 참고) */
   serverOnly?: boolean;
   /** 이 날짜(포함) 이후에 플레이된 매치만 포함 */
   startDate?: Date;
@@ -39,13 +39,16 @@ export async function filterMatchIds(
 
   if (opts.serverOnly) {
     if (accountIds.length === 0) return [];
+    // 서버 등록 계정이 기준치보다 적으면 절대 만족 불가능한 조건이 되므로,
+    // 등록 계정 수만큼으로 기준을 낮춰 작은 서버에서도 매치가 잡히게 한다.
+    const minParticipants = Math.min(SERVER_ONLY_MIN_PARTICIPANTS, accountIds.length);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const counts = (await (prisma as any).playerMatchStat.groupBy({
       by: ['matchId'],
       where: { matchId: { in: ids }, lolAccountId: { in: accountIds } },
       _count: { id: true },
     })) as { matchId: bigint; _count: { id: number } }[];
-    ids = counts.filter((c) => c._count.id >= SERVER_ONLY_MIN_PARTICIPANTS).map((c) => c.matchId);
+    ids = counts.filter((c) => c._count.id >= minParticipants).map((c) => c.matchId);
   }
 
   return ids;
