@@ -5,6 +5,7 @@ import {
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
 } from 'discord.js';
+import * as help from './general/help';
 import * as register from './account/register';
 import * as memberRegister from './account/memberRegister';
 import * as myinfo from './account/myinfo';
@@ -34,6 +35,7 @@ interface Command {
 export const commands = new Collection<string, Command>();
 
 const commandList: Command[] = [
+  help,
   register,
   memberRegister,
   myinfo,

@@ -59,6 +59,11 @@ export interface ScanResult {
   isFirstScan: boolean;
 }
 
+/** 매치 1건당 약 1.3초(레이트리밋 페이싱 기준) 소요 예상 */
+export function estimateScanMinutes(matchCount: number): number {
+  return Math.ceil((matchCount * 1.3) / 60);
+}
+
 /** 매치 1건 저장 및 통계 업데이트 */
 async function saveMatch(matchId: string): Promise<boolean> {
   const riot = await getMatch(matchId);
@@ -228,6 +233,7 @@ async function saveMatch(matchId: string): Promise<boolean> {
 export async function scanMatchesByUser(
   discordUserId: bigint,
   guildServerId?: bigint,
+  onMatchesFound?: (count: number) => void | Promise<void>,
 ): Promise<ScanResult> {
   const locked = await acquireScanLock(discordUserId);
   if (!locked) {
@@ -255,7 +261,7 @@ export async function scanMatchesByUser(
     }
 
     if (!user || user.lolAccounts.length === 0) {
-      throw new Error('등록된 라이엇 계정이 없습니다. `/등록` 먼저 해주세요.');
+      throw new Error('등록된 라이엇 계정이 없습니다. `/계정등록` 먼저 해주세요.');
     }
 
     // 해당 유저의 가장 최근 저장된 매치 날짜 조회
@@ -285,6 +291,15 @@ export async function scanMatchesByUser(
 
     // 오래된 순서부터 저장 → 중단 시 다음 증분 스캔이 이어받을 수 있음
     const matchIds = [...matchIdSet].reverse();
+
+    if (onMatchesFound) {
+      try {
+        await onMatchesFound(matchIds.length);
+      } catch (err) {
+        console.error('[matchScan] onMatchesFound 콜백 실패:', err);
+      }
+    }
+
     let saved = 0;
     let skipped = 0;
 

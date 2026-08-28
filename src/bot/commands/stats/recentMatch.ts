@@ -33,7 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (!stat) {
     await interaction.editReply(
       target.id === interaction.user.id
-        ? '전적 데이터가 없습니다. `/등록` 후 `/전적갱신` 을 해주세요.'
+        ? '전적 데이터가 없습니다. `/계정등록` 후 `/전적갱신` 을 해주세요.'
         : `${target.displayName} 님의 전적 데이터가 없습니다.`,
     );
     return;

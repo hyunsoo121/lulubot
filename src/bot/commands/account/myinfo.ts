@@ -25,7 +25,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (accounts.length === 0) {
     await interaction.editReply(
       isSelf
-        ? '등록된 계정이 없습니다. `/등록 닉네임#태그` 로 계정을 연결해주세요.'
+        ? '등록된 계정이 없습니다. `/계정등록 닉네임#태그` 로 계정을 연결해주세요.'
         : `${target.displayName} 님은 등록된 계정이 없습니다.`,
     );
     return;

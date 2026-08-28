@@ -1,5 +1,9 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { scanMatchesByUser, isScanningUser } from '../../../services/matchScan';
+import {
+  scanMatchesByUser,
+  isScanningUser,
+  estimateScanMinutes,
+} from '../../../services/matchScan';
 import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
@@ -38,7 +42,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   try {
     const notice = await interaction.editReply(`🔍 ${targetLabel} 전적 갱신 중...`);
 
-    const result = await scanMatchesByUser(discordUserId, guildServerId);
+    const result = await scanMatchesByUser(discordUserId, guildServerId, async (matchCount) => {
+      if (matchCount === 0) return;
+      const minutes = estimateScanMinutes(matchCount);
+      await notice
+        .edit(
+          `🔍 ${targetLabel} 전적 갱신 중... (총 **${matchCount}**경기, 약 **${minutes}분** 예상)`,
+        )
+        .catch(() => {});
+    });
 
     // 칭호 재계산
     if (guildServerId) {

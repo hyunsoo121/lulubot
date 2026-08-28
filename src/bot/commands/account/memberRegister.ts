@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { registerAccount } from '../../../services/account';
-import { scanMatchesByUser } from '../../../services/matchScan';
+import { scanMatchesByUser, estimateScanMinutes } from '../../../services/matchScan';
 import { recalculateTitles } from '../../../services/titleService';
 
 export const data = new SlashCommandBuilder()
@@ -48,10 +48,18 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     );
 
     await interaction.editReply(
-      `✅ 등록 완료!\n${target.displayName} → **${account.gameName}#${account.tagLine}** 연결되었습니다.`,
+      `✅ 등록 완료!\n${target.displayName} → **${account.gameName}#${account.tagLine}** 연결되었습니다.\n⏳ 전적 갱신을 시작합니다.`,
     );
 
-    scanMatchesByUser(discordUserId, guildServerId)
+    scanMatchesByUser(discordUserId, guildServerId, async (matchCount) => {
+      if (matchCount === 0) return;
+      const minutes = estimateScanMinutes(matchCount);
+      await interaction
+        .editReply(
+          `✅ 등록 완료!\n${target.displayName} → **${account.gameName}#${account.tagLine}** 연결되었습니다.\n⏳ 총 **${matchCount}**경기 발견, 약 **${minutes}분** 정도 걸릴 예정이에요.`,
+        )
+        .catch(() => {});
+    })
       .then(async () => {
         if (guildServerId) {
           await recalculateTitles(guildServerId).catch((e) =>
