@@ -38,11 +38,17 @@ function findWelcomeChannel(guild: Guild): TextChannel | null {
 /** 감사 로그의 "봇 추가" 항목에서 봇을 초대한 유저를 찾는다 (권한/기록 없으면 null) */
 async function findInviter(guild: Guild): Promise<User | PartialUser | null> {
   const me = guild.members.me;
-  if (!me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) return null;
+  if (!me?.permissions.has(PermissionFlagsBits.ViewAuditLog)) {
+    console.warn('[Bot] 감사 로그 보기 권한이 없어 초대자를 찾을 수 없음 — 채널로 대체');
+    return null;
+  }
 
   try {
     const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 5 });
     const entry = logs.entries.find((e) => e.target?.id === guild.client.user?.id);
+    if (!entry?.executor) {
+      console.warn('[Bot] 감사 로그에서 봇 추가 항목을 못 찾음 — 채널로 대체');
+    }
     return entry?.executor ?? null;
   } catch (err) {
     console.error('[Bot] 초대자 조회 실패:', err);
