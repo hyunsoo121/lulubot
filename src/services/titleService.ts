@@ -636,7 +636,11 @@ async function winRateByPosition(
     .map(([id, v]) => ({ lolAccountId: id, value: v.wins / v.total }));
 }
 
-/** 연승/연패 최장 기록 — 전체 계정 정렬 반환 */
+/** 연승/연패왕으로 인정하는 최소 연속 기록 길이.
+ *  보유자 계산(maxStreakAccounts)과 랭킹 계산(allStreakRows)이 같은 기준을 쓰도록 공유한다. */
+const MIN_STREAK = 3;
+
+/** 연승/연패 최장 기록 — MIN_STREAK 이상인 계정만 정렬 반환 */
 async function allStreakRows(
   matchIds: bigint[],
   accountIds: bigint[],
@@ -668,6 +672,7 @@ async function allStreakRows(
   }
 
   return [...streakMap.entries()]
+    .filter(([, v]) => v >= MIN_STREAK)
     .sort(([, a], [, b]) => b - a)
     .map(([id, v]) => ({ lolAccountId: id, value: v }));
 }
@@ -730,7 +735,7 @@ async function maxStreakAccounts(
 
   if (streakMap.size === 0) return [];
   const best = Math.max(...streakMap.values());
-  if (best < 3) return [];
+  if (best < MIN_STREAK) return [];
   return [...streakMap.entries()]
     .filter(([, v]) => v === best)
     .map(([id, v]) => ({ lolAccountId: id, value: v }));
@@ -755,15 +760,19 @@ async function eligibleAccountIds(
 }
 
 /** 조건부 카운트 (예: isWin && gameDuration >= X)
- *  matchIds 내 최소 3게임 이상 참여한 서버 소속 계정만 후보로 삼는다.
+ *  후보 판정("최소 3게임")은 eligibilityMatchIds 기준, 실제 카운트는 matchIds 기준으로 한다.
+ *  끈기왕/속전속결처럼 카운트 범위가 긴/짧은 게임으로 좁혀진 경우, 후보 판정까지 그 좁은
+ *  범위로 하면 "40분+ 게임을 3판 이상" 같은 과한 요건이 되므로 둘을 분리한다.
+ *  (기본값은 동일 — 퍼블전문가·불사신 등은 카운트 범위 = 후보 범위)
  */
 async function countCondition(
   matchIds: bigint[],
   accountIds: bigint[],
   where: Record<string, unknown>,
+  eligibilityMatchIds: bigint[] = matchIds,
 ): Promise<GroupRow[]> {
   if (matchIds.length === 0 || accountIds.length === 0) return [];
-  const eligible = await eligibleAccountIds(matchIds, accountIds);
+  const eligible = await eligibleAccountIds(eligibilityMatchIds, accountIds);
   if (eligible.size === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (await (prisma as any).playerMatchStat.groupBy({
@@ -839,7 +848,12 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   const allMatchIds = await getServerMatchIds(accountIds);
   // 칭호는 무조건 서버 기반(매치 참가자 8명 이상이 서버 등록 계정)으로 계산
   const matchIds = await filterMatchIds(allMatchIds, accountIds, { serverOnly: true });
-  if (matchIds.length === 0) return;
+  if (matchIds.length === 0) {
+    // 서버 기반 매치가 하나도 없으면(멤버 이탈·필터 강화·데이터 초기화 등) 이전 갱신 때
+    // 박힌 칭호가 그대로 남지 않도록 이 서버의 칭호를 모두 정리하고 종료한다.
+    await prisma.userTitle.deleteMany({ where: { guildServerId } });
+    return;
+  }
 
   const all = (field: string, agg: 'avg' | 'sum') =>
     aggregateByAccount(matchIds, accountIds, field, agg);
@@ -941,7 +955,7 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       t(
         '끈기왕',
         longIds.length > 0
-          ? countCondition(longIds, accountIds, { isWin: true })
+          ? countCondition(longIds, accountIds, { isWin: true }, matchIds)
           : Promise.resolve([]),
         'desc',
       ),
@@ -951,7 +965,7 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
       t(
         '속전속결',
         shortIds.length > 0
-          ? countCondition(shortIds, accountIds, { isWin: true })
+          ? countCondition(shortIds, accountIds, { isWin: true }, matchIds)
           : Promise.resolve([]),
         'desc',
       ),
@@ -1158,14 +1172,14 @@ export async function getTitleRanking(
     case '끈기왕':
       return sorted(
         longIds.length > 0
-          ? countCondition(longIds, accountIds, { isWin: true })
+          ? countCondition(longIds, accountIds, { isWin: true }, matchIds)
           : Promise.resolve([]),
         'desc',
       );
     case '속전속결':
       return sorted(
         shortIds.length > 0
-          ? countCondition(shortIds, accountIds, { isWin: true })
+          ? countCondition(shortIds, accountIds, { isWin: true }, matchIds)
           : Promise.resolve([]),
         'desc',
       );

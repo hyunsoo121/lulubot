@@ -641,3 +641,103 @@ describe('전체 57개 칭호 — 정확한 승자 배정 + recalc/ranking 일�
     expect(ranking[0]).toEqual({ lolAccountId: MVP, value: 21 });
   });
 });
+
+// ─── 회귀 테스트: 칭호/랭킹 버그 수정 ──────────────────────────────────────────
+
+describe('회귀: 끈기왕 후보 판정은 "전체 게임 3판" 기준 (긴 게임 3판 요구가 아님)', () => {
+  const X = 500n; // 총 6게임 = 25분 4판 + 45분 2판(모두 승)
+  const Y = 501n; // 45분 3판, 1승 2패
+
+  beforeEach(() => {
+    addMember(GUILD_A, X);
+    addMember(GUILD_A, Y);
+    let day = 0;
+    for (let i = 0; i < 4; i++) {
+      const m = BigInt(5000 + day);
+      addMatch(m, { playedAt: new Date(2026, 0, 1 + day), gameDurationSecs: 1500 });
+      addStat(m, X, { isWin: true });
+      day++;
+    }
+    for (let i = 0; i < 2; i++) {
+      const m = BigInt(5000 + day);
+      addMatch(m, { playedAt: new Date(2026, 0, 1 + day), gameDurationSecs: 2700 });
+      addStat(m, X, { isWin: true });
+      day++;
+    }
+    for (let i = 0; i < 3; i++) {
+      const m = BigInt(5000 + day);
+      addMatch(m, { playedAt: new Date(2026, 0, 1 + day), gameDurationSecs: 2700 });
+      addStat(m, Y, { isWin: i === 0 });
+      day++;
+    }
+  });
+
+  it('40분+ 게임이 2판뿐이어도 전체 6게임이면 끈기왕 후보가 되고, 2승으로 1위다', async () => {
+    const ranking = await getTitleRanking(GUILD_A, '끈기왕');
+    const ids = ranking.map((r) => r.lolAccountId);
+    expect(ids).toContain(X);
+    expect(ranking[0].lolAccountId).toBe(X);
+    expect(ranking.find((r) => r.lolAccountId === X)!.value).toBe(2);
+  });
+
+  it('recalculateTitles의 끈기왕 우승자도 X다 (랭킹 1위와 일치)', async () => {
+    await recalculateTitles(GUILD_A);
+    const call = fakePrisma.userTitle.createMany.mock.calls.find(
+      (c) => c[0].data[0]?.titleCode === '끈기왕',
+    );
+    expect(call).toBeDefined();
+    expect(call![0].data.map((d: { lolAccountId: bigint }) => d.lolAccountId)).toEqual([X]);
+  });
+});
+
+describe('회귀: 연승왕 랭킹도 3연속 미만이면 노출하지 않는다 (보유자 기준과 일치)', () => {
+  const A = 510n;
+  const B = 511n;
+
+  beforeEach(() => {
+    addMember(GUILD_A, A);
+    addMember(GUILD_A, B);
+    // 아무도 3연승 없음: A = 승패승패승(최장 1), B = 승승패승패(최장 2)
+    const seqA = [true, false, true, false, true];
+    const seqB = [true, true, false, true, false];
+    for (let i = 0; i < 5; i++) {
+      const m = BigInt(5100 + i);
+      addMatch(m, { playedAt: new Date(2026, 0, 1 + i) });
+      addStat(m, A, { isWin: seqA[i] });
+      addStat(m, B, { isWin: seqB[i] });
+    }
+  });
+
+  it('3연승자가 없으면 getTitleRanking(연승왕)은 빈 배열', async () => {
+    const ranking = await getTitleRanking(GUILD_A, '연승왕');
+    expect(ranking).toEqual([]);
+  });
+
+  it('recalculateTitles도 연승왕을 아무에게도 주지 않는다', async () => {
+    await recalculateTitles(GUILD_A);
+    const call = fakePrisma.userTitle.createMany.mock.calls.find(
+      (c) => c[0].data[0]?.titleCode === '연승왕',
+    );
+    expect(call).toBeUndefined();
+  });
+});
+
+describe('회귀: 서버 기반 매치가 0개가 되면 recalculateTitles가 기존 칭호를 정리한다', () => {
+  it('필터 통과 매치가 없으면 이 서버의 userTitle을 전부 삭제하고 createMany는 하지 않는다', async () => {
+    addMember(GUILD_A, 520n);
+    addMember(GUILD_A, 521n); // 유저 2명 → 서버기반 임계치 2
+
+    // 필러 없이 매치 1건 직접 삽입 → 서버 유저 1명만 참여 → 임계 미달로 필터 탈락
+    const m = { id: 9999n, playedAt: new Date(2026, 0, 1), gameDurationSecs: 1500 };
+    db.matches.push(m);
+    db.matchesById.set(9999n, m);
+    addStat(9999n, 520n, { isWin: true });
+
+    await recalculateTitles(GUILD_A);
+
+    expect(fakePrisma.userTitle.deleteMany).toHaveBeenCalledWith({
+      where: { guildServerId: GUILD_A },
+    });
+    expect(fakePrisma.userTitle.createMany).not.toHaveBeenCalled();
+  });
+});
