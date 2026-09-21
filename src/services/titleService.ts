@@ -626,7 +626,11 @@ async function winRateByPosition(matchIds: bigint[], position: string): Promise<
     .map(([id, v]) => ({ lolAccountId: id, value: v.wins / v.total }));
 }
 
-/** 연승/연패 최장 기록 — 전체 계정 정렬 반환 */
+/** 연승/연패왕으로 인정하는 최소 연속 기록 길이.
+ *  보유자 계산(maxStreakAccounts)과 랭킹 계산(allStreakRows)이 같은 기준을 쓰도록 공유한다. */
+const MIN_STREAK = 3;
+
+/** 연승/연패 최장 기록 — MIN_STREAK 이상인 계정만 정렬 반환 */
 async function allStreakRows(matchIds: bigint[], targetWin: boolean): Promise<GroupRow[]> {
   if (matchIds.length === 0) return [];
   const stats = await prisma.playerMatchStat.findMany({
@@ -654,6 +658,7 @@ async function allStreakRows(matchIds: bigint[], targetWin: boolean): Promise<Gr
   }
 
   return [...streakMap.entries()]
+    .filter(([, v]) => v >= MIN_STREAK)
     .sort(([, a], [, b]) => b - a)
     .map(([id, v]) => ({ lolAccountId: id, value: v }));
 }
@@ -712,7 +717,7 @@ async function maxStreakAccounts(matchIds: bigint[], targetWin: boolean): Promis
 
   if (streakMap.size === 0) return [];
   const best = Math.max(...streakMap.values());
-  if (best < 3) return [];
+  if (best < MIN_STREAK) return [];
   return [...streakMap.entries()]
     .filter(([, v]) => v === best)
     .map(([id, v]) => ({ lolAccountId: id, value: v }));
@@ -795,7 +800,12 @@ async function immortals(matchIds: bigint[]): Promise<TitleHolder[]> {
 
 export async function recalculateTitles(guildServerId: bigint): Promise<void> {
   const matchIds = await getServerMatchIds(guildServerId);
-  if (matchIds.length === 0) return;
+  if (matchIds.length === 0) {
+    // 서버 기반 매치가 하나도 없으면(멤버 이탈·데이터 초기화 등) 이전 갱신 때
+    // 박힌 칭호가 그대로 남지 않도록 이 서버의 칭호를 모두 정리하고 종료한다.
+    await prisma.userTitle.deleteMany({ where: { guildServerId } });
+    return;
+  }
 
   const all = (field: string, agg: 'avg' | 'sum') => aggregateByAccount(matchIds, field, agg);
   const pos = (position: string, field: string, agg: 'avg' | 'sum', min?: number) =>

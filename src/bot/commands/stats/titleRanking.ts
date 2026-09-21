@@ -24,6 +24,8 @@ export const data = new SlashCommandBuilder()
 const TITLE_LIST = Object.values(TITLE_DEFINITIONS);
 const PAGE_SIZE = 10;
 const MEDALS = ['🥇', '🥈', '🥉'];
+// 연승왕·연패왕은 "3판" 이 아니라 "3연속" 이 최소 기준이다 (titleService.MIN_STREAK)
+const STREAK_TITLES = new Set(['연승왕', '연패왕']);
 
 export async function autocomplete(interaction: AutocompleteInteraction) {
   const focused = interaction.options.getFocused().toLowerCase();
@@ -45,7 +47,7 @@ function buildEmbed(
     .setDescription(rows.join('\n') || '데이터 없음')
     .setColor(0x5865f2)
     .setFooter({
-      text: `${def.description} · 3판 이상 기준 · ${page + 1}/${totalPages} 페이지`,
+      text: `${def.description} · ${STREAK_TITLES.has(titleCode) ? '3연속 이상' : '3판 이상'} 기준 · ${page + 1}/${totalPages} 페이지`,
     })
     .setTimestamp();
 }
