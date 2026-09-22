@@ -8,6 +8,10 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { getDuoRanking } from '../../../services/stats';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 import prisma from '../../../lib/prisma';
 import { resolveMatchup } from '../../../lib/matchupFormat';
 
@@ -114,6 +118,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   const sortType = interaction.options.getString('유형') ?? 'same_games';
+
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
+    return;
+  }
 
   const duoRanking = await getDuoRanking(guildServerId, { serverOnly: true });
 

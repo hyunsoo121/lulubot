@@ -123,39 +123,41 @@ const { db, resetDb, fakePrisma, statSeq } = vi.hoisted(() => {
       },
     },
     playerMatchStat: {
-      findMany: async ({
-        where,
-        select,
-        orderBy,
-      }: {
-        where?: Record<string, unknown>;
-        select?: Record<string, unknown>;
-        orderBy?: Record<string, unknown>[];
-      }) => {
-        let rows = db.stats.filter((r) =>
-          matchesWhere(r as unknown as Record<string, unknown>, where),
-        );
-        if (orderBy) {
-          rows = [...rows].sort((a, b) => {
-            for (const ob of orderBy) {
-              if (ob.lolAccountId) {
-                const dir = ob.lolAccountId === 'asc' ? 1 : -1;
-                if (a.lolAccountId !== b.lolAccountId)
-                  return a.lolAccountId < b.lolAccountId ? -dir : dir;
+      findMany: vi.fn(
+        async ({
+          where,
+          select,
+          orderBy,
+        }: {
+          where?: Record<string, unknown>;
+          select?: Record<string, unknown>;
+          orderBy?: Record<string, unknown>[];
+        }) => {
+          let rows = db.stats.filter((r) =>
+            matchesWhere(r as unknown as Record<string, unknown>, where),
+          );
+          if (orderBy) {
+            rows = [...rows].sort((a, b) => {
+              for (const ob of orderBy) {
+                if (ob.lolAccountId) {
+                  const dir = ob.lolAccountId === 'asc' ? 1 : -1;
+                  if (a.lolAccountId !== b.lolAccountId)
+                    return a.lolAccountId < b.lolAccountId ? -dir : dir;
+                }
+                const mr = ob.matchRecord as { playedAt?: string } | undefined;
+                if (mr?.playedAt) {
+                  const dir = mr.playedAt === 'asc' ? 1 : -1;
+                  const ma = db.matchesById.get(a.matchId)!.playedAt.getTime();
+                  const mb = db.matchesById.get(b.matchId)!.playedAt.getTime();
+                  if (ma !== mb) return (ma - mb) * dir;
+                }
               }
-              const mr = ob.matchRecord as { playedAt?: string } | undefined;
-              if (mr?.playedAt) {
-                const dir = mr.playedAt === 'asc' ? 1 : -1;
-                const ma = db.matchesById.get(a.matchId)!.playedAt.getTime();
-                const mb = db.matchesById.get(b.matchId)!.playedAt.getTime();
-                if (ma !== mb) return (ma - mb) * dir;
-              }
-            }
-            return 0;
-          });
-        }
-        return rows.map((r) => projectSelect(r, select));
-      },
+              return 0;
+            });
+          }
+          return rows.map((r) => projectSelect(r, select));
+        },
+      ),
       groupBy: async ({
         by,
         where,
@@ -212,6 +214,14 @@ const { db, resetDb, fakePrisma, statSeq } = vi.hoisted(() => {
 });
 
 vi.mock('../lib/prisma', () => ({ default: fakePrisma }));
+
+// recalculateTitles의 서버당 재계산 락(titleRecalcLock)이 실제 Redis에 연결 시도하지
+// 않도록 — 기본적으로 항상 락 선점에 성공하는 것으로 취급(대부분의 테스트가 동시성이
+// 아니라 계산 로직 자체를 검증하므로). 락 자체를 검증하는 테스트에서만 반환값을 바꿔치기한다.
+const { fakeRedis } = vi.hoisted(() => ({
+  fakeRedis: { set: vi.fn(async () => 'OK' as string | null), del: vi.fn(async () => 1) },
+}));
+vi.mock('../lib/redis', () => ({ default: fakeRedis }));
 
 // ─── 픽스처 빌더 ────────────────────────────────────────────────────────────
 
@@ -324,6 +334,10 @@ beforeEach(() => {
   resetDb();
   fakePrisma.userTitle.deleteMany.mockClear();
   fakePrisma.userTitle.createMany.mockClear();
+  fakePrisma.playerMatchStat.findMany.mockClear();
+  fakeRedis.set.mockClear();
+  fakeRedis.set.mockResolvedValue('OK');
+  fakeRedis.del.mockClear();
 });
 
 describe('topAllBy (순수 함수)', () => {
@@ -739,5 +753,62 @@ describe('회귀: 서버 기반 매치가 0개가 되면 recalculateTitles가 �
       where: { guildServerId: GUILD_A },
     });
     expect(fakePrisma.userTitle.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('회귀: recalculateTitles는 서버당 동시 재계산을 막는다', () => {
+  it('이미 재계산 중(락 선점 실패)이면 실제 계산을 건너뛰고 조용히 리턴한다', async () => {
+    addMember(GUILD_A, 530n);
+    addMatch(1n);
+    addStat(1n, 530n, { isWin: true });
+
+    fakeRedis.set.mockResolvedValueOnce(null); // NX 락 선점 실패 시뮬레이션
+
+    await recalculateTitles(GUILD_A);
+
+    // 락을 못 잡았으니 실제 계산(삭제/삽입)은 전혀 일어나지 않아야 한다
+    expect(fakePrisma.userTitle.deleteMany).not.toHaveBeenCalled();
+    expect(fakePrisma.userTitle.createMany).not.toHaveBeenCalled();
+  });
+
+  it('락 선점에 성공하면 계산 후 반드시 락을 해제한다', async () => {
+    addMember(GUILD_A, 531n);
+    addMatch(1n);
+    addStat(1n, 531n, { isWin: true });
+
+    await recalculateTitles(GUILD_A);
+
+    expect(fakeRedis.set).toHaveBeenCalledWith(
+      `title:recalc:lock:${GUILD_A}`,
+      '1',
+      'EX',
+      120,
+      'NX',
+    );
+    expect(fakeRedis.del).toHaveBeenCalledWith(`title:recalc:lock:${GUILD_A}`);
+  });
+});
+
+describe('회귀: 분당 지표 칭호가 같은 데이터를 반복 조회하지 않는다', () => {
+  it('recalculateTitles 1회 호출로 분당 지표용 findMany가 중복 없이 최대 6번(포지션 무관 1 + 포지션 5개)만 나간다', async () => {
+    addMember(GUILD_A, 540n);
+    addMatch(1n);
+    addStat(1n, 540n, { isWin: true, position: 'TOP' });
+
+    await recalculateTitles(GUILD_A);
+
+    // 분당 지표(damageDealt 등 PER_MIN_FIELDS)를 select하는 findMany 호출만 골라낸다.
+    // 지표(DPM머신·CS왕 등 9개 + 포지션별 8개)마다 따로 조회했다면 17번 나왔을 것.
+    const perMinCalls = fakePrisma.playerMatchStat.findMany.mock.calls.filter(
+      ([args]) => (args as { select?: Record<string, unknown> })?.select?.damageDealt === true,
+    );
+    const whereKeys = perMinCalls.map(([args]) =>
+      JSON.stringify((args as { where?: unknown }).where, (_k, v) =>
+        typeof v === 'bigint' ? v.toString() : v,
+      ),
+    );
+
+    expect(perMinCalls.length).toBeLessThanOrEqual(6); // 포지션 무관 1 + TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY
+    expect(new Set(whereKeys).size).toBe(whereKeys.length); // 동일 조건으로 중복 조회한 게 없어야 함
   });
 });

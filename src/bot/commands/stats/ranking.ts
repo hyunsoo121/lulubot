@@ -8,6 +8,10 @@ import {
 } from 'discord.js';
 import { getRanking, RankingEntry } from '../../../services/stats';
 import { getTitlesForAccount } from '../../../services/titleService';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
@@ -17,17 +21,14 @@ export const data = new SlashCommandBuilder()
 const MEDALS = ['🥇', '🥈', '🥉'];
 const PAGE_SIZE = 10;
 
-async function buildRows(
+/** 전체 랭킹의 표시 행을 한 번에 전부 만든다 (Discord API/DB 조회를 페이지 넘길 때마다 반복하지 않기 위함) */
+async function buildAllRows(
   entries: RankingEntry[],
   interaction: ChatInputCommandInteraction,
   guildServerId: bigint,
-  offset: number,
 ) {
-  const page = entries.slice(offset, offset + PAGE_SIZE);
-
   return Promise.all(
-    page.map(async ({ discordUserId, accounts, games, wins, kills, deaths, assists }, i) => {
-      const rank = offset + i;
+    entries.map(async ({ discordUserId, accounts, games, wins, kills, deaths, assists }, rank) => {
       const medal = MEDALS[rank] ?? `**${rank + 1}.**`;
 
       let memberName: string;
@@ -92,6 +93,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     create: { id: guildServerId, serverName: interaction.guild?.name },
   });
 
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
+    return;
+  }
+
   const entries = await getRanking(guildServerId, { serverOnly: true });
 
   if (entries.length === 0) {
@@ -104,9 +111,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   const totalPages = Math.ceil(entries.length / PAGE_SIZE);
   let page = 0;
 
-  const rows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
+  const allRows = await buildAllRows(entries, interaction, guildServerId);
   const message = await interaction.editReply({
-    embeds: [buildEmbed(rows, page, totalPages)],
+    embeds: [buildEmbed(allRows.slice(0, PAGE_SIZE), page, totalPages)],
     components: totalPages > 1 ? [buildButtons(page, totalPages)] : [],
   });
 
@@ -123,9 +130,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (btn.customId === 'ranking_prev') page--;
     if (btn.customId === 'ranking_next') page++;
 
-    const newRows = await buildRows(entries, interaction, guildServerId, page * PAGE_SIZE);
     await btn.update({
-      embeds: [buildEmbed(newRows, page, totalPages)],
+      embeds: [
+        buildEmbed(allRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), page, totalPages),
+      ],
       components: [buildButtons(page, totalPages)],
     });
   });

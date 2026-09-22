@@ -1,5 +1,9 @@
 import { ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { scanMatchesByUser, isScanningUser } from '../../../services/matchScan';
+import {
+  scanMatchesByUser,
+  isScanningUser,
+  estimateScanMinutes,
+} from '../../../services/matchScan';
 import { recalculateTitles } from '../../../services/titleService';
 import prisma from '../../../lib/prisma';
 
@@ -55,7 +59,15 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     try {
-      const result = await scanMatchesByUser(discordUserId, guildServerId);
+      const result = await scanMatchesByUser(discordUserId, guildServerId, async (matchCount) => {
+        if (matchCount === 0) return;
+        const minutes = estimateScanMinutes(matchCount);
+        await notice
+          .edit(
+            `🔍 총 **${users.length}**명 순차 갱신 중... (${done}/${users.length})\n> 현재: ${accountLabel} — **${matchCount}**경기 발견, 약 **${minutes}분** 예상`,
+          )
+          .catch(() => {});
+      });
       totalSaved += result.saved;
     } catch (err) {
       const msg = err instanceof Error ? err.message : '알 수 없는 오류';
@@ -89,5 +101,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     lines.push(`> ⚠️ 실패: ${failed.join(', ')}`);
   }
 
-  await notice.edit(lines.join('\n'));
+  try {
+    await notice.edit(lines.join('\n'));
+  } catch (err) {
+    // 스캔이 오래 걸려 인터랙션 토큰(15분)이 만료됐을 수 있음 — edit이 실패해도
+    // 결과 자체는 이미 반영됐으니, 채널에 새 메시지로라도 결과를 알려준다.
+    console.error(
+      '[scanAll] 완료 메시지 수정 실패(인터랙션 토큰 만료 가능성) — 채널에 재전송:',
+      err,
+    );
+    if (interaction.channel?.isSendable()) {
+      await interaction.channel.send(lines.join('\n')).catch((err2: unknown) => {
+        console.error('[scanAll] 채널 메시지 폴백도 실패:', err2);
+      });
+    }
+  }
 }
