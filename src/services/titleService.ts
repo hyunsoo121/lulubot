@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import redis from '../lib/redis';
 import { filterMatchIds } from './matchFilter';
 
 export interface TitleInfo {
@@ -613,6 +614,47 @@ async function aggregatePerMinByPosition(
   return buildPerMinMap(stats, field, minGames);
 }
 
+/**
+ * doRecalculateTitles 전용: 분당 지표 칭호가 9개(포지션 무관) + 8개(포지션별)나 되는데,
+ * 전부 aggregatePerMin/aggregatePerMinByPosition을 통해 매번 같은 범위를 독립적으로 다시
+ * 조회하면 같은 matchIds/accountIds 조합의 넓은 row셋을 최대 17번 반복 조회하게 된다.
+ * "포지션 없음" 1번 + "포지션별" 최대 1번씩만 실제 쿼리하고, 여러 지표가 그 결과를 공유하도록
+ * 캐싱하는 팩토리. (getTitleRanking은 한 번에 칭호 하나만 계산해서 이 중복이 없으므로 그대로 둠)
+ */
+function makePerMinStatsFetcher(matchIds: bigint[], accountIds: bigint[]) {
+  const select = {
+    lolAccountId: true,
+    ...PER_MIN_FIELDS,
+    matchRecord: { select: { gameDurationSecs: true } },
+  };
+
+  let allStats: Promise<StatWithDuration[]> | null = null;
+  const byPosition = new Map<string, Promise<StatWithDuration[]>>();
+
+  return {
+    all(): Promise<StatWithDuration[]> {
+      if (!allStats) {
+        allStats = prisma.playerMatchStat.findMany({
+          where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds } },
+          select,
+        });
+      }
+      return allStats;
+    },
+    byPosition(position: string): Promise<StatWithDuration[]> {
+      let p = byPosition.get(position);
+      if (!p) {
+        p = prisma.playerMatchStat.findMany({
+          where: { matchId: { in: matchIds }, lolAccountId: { in: accountIds }, position },
+          select,
+        });
+        byPosition.set(position, p);
+      }
+      return p;
+    },
+  };
+}
+
 /** 포지션별 승률 */
 async function winRateByPosition(
   matchIds: bigint[],
@@ -843,7 +885,32 @@ async function immortals(matchIds: bigint[], accountIds: bigint[]): Promise<Titl
 
 // ─── main export ─────────────────────────────────────────────────────────────
 
+function titleRecalcLockKey(guildServerId: bigint) {
+  return `title:recalc:lock:${guildServerId}`;
+}
+
+/**
+ * 칭호 재계산은 서버당 최대 1개만 동시에 돈다. /계정등록·/멤버등록·/전적갱신·/전체갱신이
+ * 각자 자기 스캔이 끝나면 독립적으로 이 함수를 호출하는데, 여러 멤버가 비슷한 시간에
+ * 갱신하면 같은 서버에 대해 50~70개 쿼리짜리 무거운 재계산이 동시에 여러 번 겹쳐 돌게 된다.
+ * 이미 재계산 중이면(락 선점 실패) 이번 요청은 건너뛴다 — 진행 중인 계산이 곧 끝나고,
+ * 그 결과도 충분히 최신이므로 중복 계산할 필요가 없다. (완벽한 최신성이 필요한 데이터가
+ * 아니라 다음 갱신 트리거 때 다시 반영되면 되는 통계성 기능이라 이 정도 단순함으로 충분)
+ */
 export async function recalculateTitles(guildServerId: bigint): Promise<void> {
+  const locked = await redis.set(titleRecalcLockKey(guildServerId), '1', 'EX', 120, 'NX');
+  if (!locked) {
+    console.log(`[title] guildServerId=${guildServerId} 재계산이 이미 진행 중이라 건너뜀`);
+    return;
+  }
+  try {
+    await doRecalculateTitles(guildServerId);
+  } finally {
+    await redis.del(titleRecalcLockKey(guildServerId));
+  }
+}
+
+async function doRecalculateTitles(guildServerId: bigint): Promise<void> {
   const accountIds = await getServerAccountIds(guildServerId);
   const allMatchIds = await getServerMatchIds(accountIds);
   // 칭호는 무조건 서버 기반(매치 참가자 8명 이상이 서버 등록 계정)으로 계산
@@ -894,14 +961,17 @@ export async function recalculateTitles(guildServerId: bigint): Promise<void> {
     order: 'desc' | 'asc' = 'desc',
   ): Promise<TR> => pos(position, field, agg).then((r) => [code, topAllBy(r, order)]);
 
+  const perMinStats = makePerMinStatsFetcher(matchIds, accountIds);
+
   const pm = (code: string, field: PerMinField): Promise<TR> =>
-    aggregatePerMin(matchIds, accountIds, field).then((r) => [code, topAllBy(r, 'desc')]);
+    perMinStats
+      .all()
+      .then((stats) => [code, topAllBy(buildPerMinMap(stats, field, 3), 'desc')] as TR);
 
   const pmp = (code: string, position: string, field: PerMinField): Promise<TR> =>
-    aggregatePerMinByPosition(matchIds, accountIds, position, field).then((r) => [
-      code,
-      topAllBy(r, 'desc'),
-    ]);
+    perMinStats
+      .byPosition(position)
+      .then((stats) => [code, topAllBy(buildPerMinMap(stats, field, 3), 'desc')] as TR);
 
   const titleResults: TR[] = await Promise.all([
     // 전투

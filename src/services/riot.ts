@@ -12,9 +12,32 @@ export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 여러 유저의 스캔이 동시에 돌아도 Riot API 호출 자체는 전역으로 한 줄로 세워 페이싱한다.
+ * 유저별 스캔 락(matchScan.ts의 scan:lock:*)은 "같은 유저 중복 스캔"만 막을 뿐이고,
+ * API 키의 레이트리밋은 키 하나에 전역으로 걸리므로 별도의 전역 페이싱이 필요하다.
+ * (이전엔 호출부마다 각자 sleep(1200)을 걸었는데, 동시에 도는 스캔 수만큼 실제
+ * 호출 빈도가 배로 뛰는 문제가 있었다.)
+ */
+const MIN_CALL_INTERVAL_MS = 1200;
+let throttleQueue: Promise<void> = Promise.resolve();
+let lastCallAt = 0;
+
+function throttle(): Promise<void> {
+  const next = throttleQueue.then(async () => {
+    const wait = Math.max(0, lastCallAt + MIN_CALL_INTERVAL_MS - Date.now());
+    if (wait > 0) await sleep(wait);
+    lastCallAt = Date.now();
+  });
+  // 한 호출의 대기가 실패해도(사실상 없지만) 큐 자체가 끊기지 않도록
+  throttleQueue = next.catch(() => {});
+  return next;
+}
+
 /** 429 시 Retry-After만큼 기다렸다가 재시도하는 래퍼 */
 async function riotGet<T>(url: string, params?: Record<string, unknown>): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt++) {
+    await throttle();
     try {
       const { data } = await riotApi.get(url, { params });
       return data as T;
@@ -63,7 +86,7 @@ export async function getAllMatchIds(puuid: string, startTime?: number): Promise
     all.push(...data);
     if (data.length < count) break;
     start += count;
-    await sleep(1200);
+    // 다음 페이지 호출도 riotGet 내부의 전역 throttle이 알아서 페이싱하므로 별도 sleep 불필요
   }
 
   return all;

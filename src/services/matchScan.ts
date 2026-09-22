@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma';
 import redis from '../lib/redis';
-import { getAllMatchIds, getMatch, sleep } from './riot';
+import { getAllMatchIds, getMatch } from './riot';
 
 const SCAN_LOCK_TTL = 60 * 30; // 30분 (최대 스캔 시간)
 const SCAN_COOLDOWN_TTL = 60 * 3; // 3분 쿨다운
@@ -308,7 +308,7 @@ export async function scanMatchesByUser(
         const wasSaved = await saveMatch(matchId);
         if (wasSaved) saved++;
         else skipped++;
-        await sleep(1200);
+        // saveMatch 내부에서 getMatch가 riotGet의 전역 throttle을 타므로 별도 sleep 불필요
       } catch (err) {
         console.error(`[matchScan] saveMatch 실패 matchId=${matchId}:`, err);
         skipped++;

@@ -63,26 +63,51 @@ const PAGES: { name: string; codes: string[] }[][] = [
   CATEGORIES.slice(8, 11), // 미드, 원딜, 서폿
 ];
 
-async function getHolderName(
-  title: UserTitleWithAccount,
-  interaction: ChatInputCommandInteraction,
-): Promise<string> {
-  const acc = title.lolAccount;
-  const accountStr = `${acc.gameName}#${acc.tagLine}`;
-  if (acc.user?.discordUserId) {
-    try {
-      const member = await interaction.guild!.members.fetch(acc.user.discordUserId.toString());
-      return `${member.displayName} (${accountStr})`;
-    } catch {}
-  }
-  return accountStr;
-}
-
-async function buildEmbed(
-  page: number,
+/**
+ * 보유자 전원의 표시 이름을 한 번에 전부 계산해둔다 (Discord API 조회를 페이지 넘길
+ * 때마다 반복하지 않기 위함). 같은 유저가 여러 칭호를 들고 있어도 fetch는 유저당 1번만.
+ */
+async function resolveHolderNames(
   userTitles: UserTitleWithAccount[],
   interaction: ChatInputCommandInteraction,
-): Promise<EmbedBuilder> {
+): Promise<Map<bigint, string>> {
+  const uniqueDiscordIds = [
+    ...new Set(
+      userTitles
+        .map((t) => t.lolAccount.user?.discordUserId)
+        .filter((id): id is bigint => id != null),
+    ),
+  ];
+
+  const displayNameByDiscordId = new Map<bigint, string>();
+  await Promise.all(
+    uniqueDiscordIds.map(async (discordUserId) => {
+      try {
+        const member = await interaction.guild!.members.fetch(discordUserId.toString());
+        displayNameByDiscordId.set(discordUserId, member.displayName);
+      } catch {
+        // 서버 미접속 등 — 아래에서 계정명으로 폴백
+      }
+    }),
+  );
+
+  const holderNameById = new Map<bigint, string>();
+  for (const t of userTitles) {
+    const acc = t.lolAccount;
+    const accountStr = `${acc.gameName}#${acc.tagLine}`;
+    const displayName = acc.user?.discordUserId
+      ? displayNameByDiscordId.get(acc.user.discordUserId)
+      : undefined;
+    holderNameById.set(t.id, displayName ? `${displayName} (${accountStr})` : accountStr);
+  }
+  return holderNameById;
+}
+
+function buildEmbed(
+  page: number,
+  userTitles: UserTitleWithAccount[],
+  holderNameById: Map<bigint, string>,
+): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle('🏅 서버 칭호 보유자')
     .setColor(0x5865f2)
@@ -104,7 +129,7 @@ async function buildEmbed(
         continue;
       }
 
-      const holderNames = await Promise.all(holders.map((t) => getHolderName(t, interaction)));
+      const holderNames = holders.map((t) => holderNameById.get(t.id)!);
       const statStr = holders[0].statValue != null ? def.formatValue(holders[0].statValue) : '';
       const holderStr = holderNames.join(', ');
 
@@ -157,8 +182,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
+  const holderNameById = await resolveHolderNames(userTitles, interaction);
+
   let page = 0;
-  const embed = await buildEmbed(page, userTitles, interaction);
+  const embed = buildEmbed(page, userTitles, holderNameById);
   const message = await interaction.editReply({
     embeds: [embed],
     components: [buildButtons(page)],
@@ -179,7 +206,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       if (btn.customId === 'title_prev') page--;
       if (btn.customId === 'title_next') page++;
 
-      const newEmbed = await buildEmbed(page, userTitles, interaction);
+      const newEmbed = buildEmbed(page, userTitles, holderNameById);
       await btn.update({ embeds: [newEmbed], components: [buildButtons(page)] });
     } catch (e) {
       console.error('[칭호] 버튼 처리 오류:', e);
