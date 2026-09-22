@@ -5,6 +5,10 @@ import {
   CompareStat,
   HeadToHeadStat,
 } from '../../../services/stats';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 import { resolveMatchup } from '../../../lib/matchupFormat';
 
 export const data = new SlashCommandBuilder()
@@ -99,6 +103,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   const guildServerId = BigInt(interaction.guildId!);
+
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
+    return;
+  }
 
   const [stat1, stat2, h2h] = await Promise.all([
     getComparisonStat(guildServerId, BigInt(user1.id), { serverOnly: true }),

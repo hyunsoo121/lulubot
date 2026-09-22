@@ -7,6 +7,10 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { getBanPickStats, BanPickRow, BanPickStats } from '../../../services/stats';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 import { getChampionName } from '../../../lib/championNames';
 
 export const data = new SlashCommandBuilder()
@@ -75,6 +79,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
   const guildServerId = BigInt(interaction.guildId!);
+
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
+    return;
+  }
+
   const stats = await getBanPickStats(guildServerId);
 
   if (stats.totalMatches === 0) {

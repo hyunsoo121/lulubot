@@ -7,6 +7,10 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { TITLE_DEFINITIONS } from '../../../services/titleService';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
@@ -136,6 +140,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
   const guildServerId = BigInt(interaction.guildId!);
+
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
+    return;
+  }
 
   const userTitles = await prisma.userTitle.findMany({
     where: { guildServerId },

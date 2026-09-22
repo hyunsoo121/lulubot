@@ -9,6 +9,10 @@ import {
 import prisma from '../../../lib/prisma';
 import { getServerAccountIds, getServerMatchIds } from '../../../services/titleService';
 import { filterMatchIds } from '../../../services/matchFilter';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 
 export const data = new SlashCommandBuilder()
   .setName('라인랭킹')
@@ -160,6 +164,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (users.length === 0) {
     await interaction.editReply('전적 데이터가 없습니다. `/전적갱신` 을 먼저 실행해주세요.');
+    return;
+  }
+
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
     return;
   }
 

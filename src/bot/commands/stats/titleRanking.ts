@@ -8,6 +8,10 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import { TITLE_DEFINITIONS, getTitleRanking } from '../../../services/titleService';
+import {
+  getServerOnlyReadiness,
+  serverOnlyNotReadyMessage,
+} from '../../../services/serverReadiness';
 import prisma from '../../../lib/prisma';
 
 export const data = new SlashCommandBuilder()
@@ -83,6 +87,13 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   }
 
   const guildServerId = BigInt(interaction.guildId!);
+
+  const readiness = await getServerOnlyReadiness(guildServerId);
+  if (!readiness.ready) {
+    await interaction.editReply(serverOnlyNotReadyMessage(readiness.registeredCount));
+    return;
+  }
+
   const ranking = await getTitleRanking(guildServerId, titleCode);
 
   if (ranking.length === 0) {

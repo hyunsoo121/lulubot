@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma';
 
 export interface MatchFilterOptions {
-  /** true면 매치 참가자 중 서버 등록 계정이 일정 수 이상인 매치만 포함 (기준은 SERVER_ONLY_MIN_PARTICIPANTS 참고) */
+  /** true면 매치 참가자 중 서버 등록 계정이 SERVER_ONLY_MIN_PARTICIPANTS명 이상인 매치만 포함 */
   serverOnly?: boolean;
   /** 이 날짜(포함) 이후에 플레이된 매치만 포함 */
   startDate?: Date;
@@ -9,7 +9,34 @@ export interface MatchFilterOptions {
   endDate?: Date;
 }
 
-const SERVER_ONLY_MIN_PARTICIPANTS = 8;
+/**
+ * 서버기반(serverOnly) 필터의 매치당 최소 참가자 수 — 고정값.
+ * 서버 등록 인원 수에 비례해서 낮추지 않는다: 그러면 서버마다 기준이 달라지고
+ * 인원이 들고날 때마다 과거 판의 인정 여부까지 바뀌어서 유저가 예측할 수 없다.
+ * 대신 인원이 이 수치 미만인 서버는 각 커맨드에서 "N명 이상부터 사용 가능"이라고
+ * 명확히 안내한다 (getRegisteredUserCount 참고).
+ */
+export const SERVER_ONLY_MIN_PARTICIPANTS = 8;
+
+/** accountIds → userId 매핑 (userId 없는 계정은 제외) */
+async function getAccountToUserMap(accountIds: bigint[]): Promise<Map<bigint, bigint>> {
+  if (accountIds.length === 0) return new Map();
+  const accounts = await prisma.lolAccount.findMany({
+    where: { id: { in: accountIds } },
+    select: { id: true, userId: true },
+  });
+  return new Map(
+    accounts
+      .filter((a): a is typeof a & { userId: bigint } => a.userId !== null)
+      .map((a) => [a.id, a.userId]),
+  );
+}
+
+/** 서버 등록 계정들이 실제로 몇 명의 고유 디스코드 유저에 대응하는지(멀티계정 중복 제거) */
+export async function getRegisteredUserCount(accountIds: bigint[]): Promise<number> {
+  const accountToUser = await getAccountToUserMap(accountIds);
+  return new Set(accountToUser.values()).size;
+}
 
 /**
  * matchIds를 옵션에 따라 추가로 필터링한다.
@@ -43,19 +70,8 @@ export async function filterMatchIds(
     // 인원 기준은 라이엇 계정이 아니라 디스코드 유저 단위여야 한다 — 한 유저가
     // 계정을 여러 개 등록해도 실제 매치엔 그중 하나로만 참여하므로, 계정 수를
     // 그대로 쓰면 멀티계정 유저가 있는 서버의 기준치가 실제 인원보다 부풀려진다.
-    const accounts = await prisma.lolAccount.findMany({
-      where: { id: { in: accountIds } },
-      select: { id: true, userId: true },
-    });
-    const accountToUser = new Map(accounts.map((a) => [a.id, a.userId]));
-    const uniqueUserCount = new Set(accounts.map((a) => a.userId).filter((id) => id !== null)).size;
-    if (uniqueUserCount === 0) return [];
-
-    // 원래 기준(10명 중 8명=80%)을 서버 등록 유저 수에 비례해서 적용
-    const minParticipants = Math.min(
-      SERVER_ONLY_MIN_PARTICIPANTS,
-      Math.ceil(uniqueUserCount * 0.8),
-    );
+    const accountToUser = await getAccountToUserMap(accountIds);
+    if (accountToUser.size === 0) return [];
 
     const rows = await prisma.playerMatchStat.findMany({
       where: { matchId: { in: ids }, lolAccountId: { in: accountIds } },
@@ -73,7 +89,7 @@ export async function filterMatchIds(
     }
 
     ids = [...usersByMatch.entries()]
-      .filter(([, users]) => users.size >= minParticipants)
+      .filter(([, users]) => users.size >= SERVER_ONLY_MIN_PARTICIPANTS)
       .map(([key]) => BigInt(key));
   }
 
