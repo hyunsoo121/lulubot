@@ -42,6 +42,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           '`/챔피언랭킹` — 챔피언별 랭킹',
           '`/라인랭킹` — 라인별 특화 스탯 랭킹',
           '`/밴픽률` — 챔피언 밴픽률 순위',
+          '`/서버현황` — 서버 등록 인원 및 서버기반 기능 사용 가능 여부 확인',
         ].join('\n'),
       },
       {
@@ -66,7 +67,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         ].join('\n'),
       },
     )
-    .setFooter({ text: '"서버 기반"은 이 서버에 등록된 멤버들끼리 한 내전만 집계합니다.' })
+    .setFooter({
+      text: '"서버 기반"은 이 서버에 등록된 멤버들끼리 한 내전만 집계 — 등록 인원 8명 이상부터 켜짐 (/서버현황으로 확인)',
+    })
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed] });

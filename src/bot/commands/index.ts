@@ -13,6 +13,7 @@ import * as side from './match/side';
 import * as record from './stats/record';
 import * as ranking from './stats/ranking';
 import * as overallRanking from './stats/overallRanking';
+import * as serverStatus from './stats/serverStatus';
 import * as scan from './stats/scan';
 import * as globalRecord from './stats/globalRecord';
 import * as recentMatch from './stats/recentMatch';
@@ -43,6 +44,7 @@ const commandList: Command[] = [
   record,
   ranking,
   overallRanking,
+  serverStatus,
   scan,
   globalRecord,
   recentMatch,
