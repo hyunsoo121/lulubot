@@ -1,7 +1,25 @@
 import prisma from '../lib/prisma';
+import { Prisma } from '../generated/prisma';
 import { getAccountByRiotId } from './riot';
 
 const MAX_ACCOUNTS_PER_USER = 5;
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+}
+
+async function linkUserToGuild(userId: bigint, guildServerId: bigint) {
+  await prisma.guildServer.upsert({
+    where: { id: guildServerId },
+    update: {},
+    create: { id: guildServerId },
+  });
+  await prisma.userGuildServer.upsert({
+    where: { userId_guildServerId: { userId, guildServerId } },
+    update: {},
+    create: { userId, guildServerId },
+  });
+}
 
 export async function registerAccount(
   discordUserId: bigint,
@@ -25,18 +43,7 @@ export async function registerAccount(
     }
     // 본인이 이미 등록한 경우 (userId=null로 해제된 경우 제외) → 서버 연결만 추가하고 반환
     if (existing.userId !== null && existing.user?.discordUserId === discordUserId) {
-      if (guildServerId) {
-        await prisma.guildServer.upsert({
-          where: { id: guildServerId },
-          update: {},
-          create: { id: guildServerId },
-        });
-        await prisma.userGuildServer.upsert({
-          where: { userId_guildServerId: { userId: existing.user.id, guildServerId } },
-          update: {},
-          create: { userId: existing.user.id, guildServerId },
-        });
-      }
+      if (guildServerId) await linkUserToGuild(existing.user.id, guildServerId);
       throw new Error('이미 등록된 계정입니다.');
     }
   }
@@ -57,35 +64,48 @@ export async function registerAccount(
     );
   }
 
-  // LolAccount upsert (puuid 기준)
-  const lolAccount = await prisma.lolAccount.upsert({
-    where: { puuid: riotAccount.puuid },
-    update: {
-      userId: user.id,
-      gameName: riotAccount.gameName,
-      tagLine: riotAccount.tagLine,
-    },
-    create: {
-      userId: user.id,
-      puuid: riotAccount.puuid,
-      gameName: riotAccount.gameName,
-      tagLine: riotAccount.tagLine,
-    },
-  });
+  // LolAccount를 원자적으로 확보한다.
+  // 위 existing 체크는 이 시점 이전의 상태일 뿐이라, 그 사이 다른 유저가 같은 puuid를
+  // 먼저 등록해버리는 레이스가 가능하다 — 그래서 최종 쓰기는 DB의 유니크 제약과
+  // 조건부 update(where에 userId: null 포함)에 맡겨 원자적으로 승자를 하나로 가른다.
+  let lolAccount;
+  try {
+    lolAccount = await prisma.lolAccount.create({
+      data: {
+        userId: user.id,
+        puuid: riotAccount.puuid,
+        gameName: riotAccount.gameName,
+        tagLine: riotAccount.tagLine,
+      },
+    });
+  } catch (err) {
+    if (!isUniqueConstraintError(err)) throw err;
+
+    // 이미 존재하는 puuid(레이스에서 졌거나, 원래 있던/해제된 계정) — 주인이 없을 때만
+    // (userId: null) claim. where에 조건이 같이 걸려 있어 두 요청이 동시에 와도
+    // DB가 그중 하나에만 count: 1을 준다.
+    const claimed = await prisma.lolAccount.updateMany({
+      where: { puuid: riotAccount.puuid, userId: null },
+      data: {
+        userId: user.id,
+        gameName: riotAccount.gameName,
+        tagLine: riotAccount.tagLine,
+      },
+    });
+
+    const current = await prisma.lolAccount.findUniqueOrThrow({
+      where: { puuid: riotAccount.puuid },
+      include: { user: true },
+    });
+
+    if (claimed.count === 0 && current.user?.discordUserId !== discordUserId) {
+      throw new Error('이미 다른 유저가 등록한 계정입니다.');
+    }
+    lolAccount = current;
+  }
 
   // 서버-유저 연결 (guildServerId가 있을 때)
-  if (guildServerId) {
-    await prisma.guildServer.upsert({
-      where: { id: guildServerId },
-      update: {},
-      create: { id: guildServerId },
-    });
-    await prisma.userGuildServer.upsert({
-      where: { userId_guildServerId: { userId: user.id, guildServerId } },
-      update: {},
-      create: { userId: user.id, guildServerId },
-    });
-  }
+  if (guildServerId) await linkUserToGuild(user.id, guildServerId);
 
   return lolAccount;
 }
