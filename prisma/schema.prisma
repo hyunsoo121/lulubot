@@ -100,6 +100,7 @@ model ChampionBan {
 
   matchRecord MatchRecord @relation(fields: [matchId], references: [id])
 
+  @@index([matchId])
   @@map("champion_ban")
 }
 
@@ -142,6 +143,12 @@ model PlayerMatchStat {
   matchRecord MatchRecord @relation(fields: [matchId], references: [id])
   lolAccount  LolAccount  @relation(fields: [lolAccountId], references: [id])
 
+  // 거의 모든 통계/랭킹/칭호 쿼리가 matchId·lolAccountId·championId로 필터링하는데
+  // 인덱스가 없어 풀 테이블 스캔이 되고 있었음 — 매치 데이터가 쌓일수록 전체 커맨드가
+  // 같이 느려지는(그리고 매치 저장 자체도 느려지는) 구조라 미리 추가해둔다.
+  @@index([matchId])
+  @@index([lolAccountId])
+  @@index([championId])
   @@map("player_match_stat")
 }
 
