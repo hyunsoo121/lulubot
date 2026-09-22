@@ -7,7 +7,7 @@ import {
 import { getAccountByDiscordId } from '../../../services/account';
 
 export const data = new SlashCommandBuilder()
-  .setName('유저정보')
+  .setName('유저계정정보')
   .setDescription('연결된 라이엇 계정을 확인합니다.')
   .addUserOption((option) =>
     option.setName('유저').setDescription('조회할 유저 (미입력 시 본인)').setRequired(false),
@@ -25,7 +25,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (accounts.length === 0) {
     await interaction.editReply(
       isSelf
-        ? '등록된 계정이 없습니다. `/등록 닉네임#태그` 로 계정을 연결해주세요.'
+        ? '등록된 계정이 없습니다. `/계정등록 닉네임#태그` 로 계정을 연결해주세요.'
         : `${target.displayName} 님은 등록된 계정이 없습니다.`,
     );
     return;

@@ -12,6 +12,17 @@ services:
       - ./public/screenshots:/app/public/screenshots
     depends_on:
       - redis
+      - postgres
+    networks:
+      - lulubot-net
+
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - lulubot-net
 
@@ -26,6 +37,8 @@ services:
 networks:
   lulubot-net:
     driver: bridge
+    name: lulubot-net
 
 volumes:
   redis_data:
+  postgres_data:

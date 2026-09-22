@@ -3,8 +3,8 @@ import { getGlobalStatByDiscordId } from '../../../services/stats';
 import { getChampionName } from '../../../lib/championNames';
 
 export const data = new SlashCommandBuilder()
-  .setName('전체전적')
-  .setDescription('전 서버 합산 커리어를 조회합니다.')
+  .setName('유저전체전적')
+  .setDescription('서버 구분 없이 모든 커스텀 게임 기준 커리어를 조회합니다.')
   .addUserOption((option) => option.setName('유저').setDescription('조회할 유저 (미입력 시 본인)'));
 
 export async function execute(interaction: ChatInputCommandInteraction) {

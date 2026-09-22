@@ -22,7 +22,7 @@ async function fetchIds(params: Record<string, unknown>): Promise<string[]> {
 async function main() {
   const SIX_MONTHS_AGO = Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 180;
 
-  console.log('== queue=0 (커스텀) ==');
+  console.log('== queue=0 ==');
   const withQueue = await fetchIds({ queue: 0, start: 0, count: 20, startTime: SIX_MONTHS_AGO });
   console.log(`결과 수: ${withQueue.length}`);
   console.log(withQueue);

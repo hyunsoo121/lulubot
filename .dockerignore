@@ -8,5 +8,4 @@ dist
 *.md
 npm-debug.log*
 .DS_Store
-prisma/migrations
 src/generated

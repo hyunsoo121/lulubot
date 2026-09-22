@@ -11,7 +11,7 @@ import { getChampionName } from '../../../lib/championNames';
 
 export const data = new SlashCommandBuilder()
   .setName('모스트챔피언')
-  .setDescription('챔피언별 전적을 조회합니다.')
+  .setDescription('해당 유저의 모스트 챔피언을 조회합니다. (모든 게임 기준)')
   .addUserOption((option) =>
     option.setName('유저').setDescription('조회할 유저 (미입력 시 본인)').setRequired(false),
   );
